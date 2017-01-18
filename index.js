@@ -654,3 +654,236 @@ http.header = function(h) {
         range: range
     };
 };
+http.parse = function(d, q) { /*parse POST body data*/
+    let b = {
+            query: {},
+            files: []
+        },
+        n = 0,
+        x = [],
+        y = Buffer.from('--' + q),
+        i = y.length;
+    while ((n = d.indexOf(y, n)) !== -1) {
+        x.push(n);
+        n += i;
+    }
+    n = x.length;
+    if (n > 2) { /*found parts*/
+        for (let j = 0, z = 0, l = http.HF.length, r = http.HN.length; j < n - 1; j++) {
+            let s = d.slice(x[j] + i + 2, x[j + 1]);
+            if ((z = s.indexOf(http.L)) !== -1) {
+                let h = s.slice(0, z),
+                    c = s.slice(z + 4, -2);
+                if ((z = h.indexOf(http.HF)) !== -1) { /*is file, attachment*/
+                    let m = h.slice(z + l);
+                    if ((z = m.indexOf(http.Q)) !== -1) {
+                        b.files.push({
+                            name: m.slice(0, z).toString(),
+                            data: c
+                        });
+                    }
+                } else if ((z = h.indexOf(http.HN)) !== -1) { /*is key, querystring*/
+                    let m = h.slice(z + r);
+                    if ((z = m.indexOf(http.Q)) !== -1) {
+                        let k = m.slice(0, z).toString();
+                        if (k in b.query) { /*found the key*/
+                            if (typeof b.query[k] === 'string') {
+                                b.query[k] = [b.query[k]]; /*create array for multiple key values, like querystring does*/
+                            }
+                            b.query[k].push(c.toString()); /*push new key*/
+                        } else { /*add new key*/
+                            b.query[k] = c.toString();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return b;
+};
+http.range = function(d, l) { /*verify Range bytes value*/
+    let r = null,
+        s = d.split('-');
+    if (s.length === 2) {
+        if (s[0] === '' && s[1] !== '') { /*"-n" start l-n end l*/
+            s[1] = parseInt(s[1]);
+            if (s[1] > 0 && s[1] <= l) {
+                r = [l - s[1], l];
+            }
+        } else if (s[0] !== '' && s[1] === '') { /*"n-" start n end l*/
+            s[0] = parseInt(s[0]);
+            if (s[0] >= 0 && s[0] < l) {
+                r = [s[0], l];
+            }
+        } else if (s[0] !== '' && s[1] !== '') { /*"s-e" start s end e+1*/
+            s[0] = parseInt(s[0]);
+            s[1] = parseInt(s[1]);
+            if (s[0] >= 0 && s[0] <= s[1] && s[1] < l) {
+                r = [s[0], s[1] + 1];
+            }
+        }
+    }
+    return r;
+};
+http.etag = function(s) { /*non-blocking (no I/O) safe sync call for md5 hex calculation*/
+    return crypto.createHash('md5').update(s).digest('hex');
+};
+
+/*store common values in memory for fast access and less I/O*/
+http.n = '\r\n';
+http.P = Buffer.from(':');
+http.S = Buffer.from(' ');
+http.B = Buffer.from(';');
+http.Q = Buffer.from('"');
+http.N = Buffer.from(http.n);
+http.L = Buffer.concat([http.N, http.N]);
+http.CH = Buffer.from('Host: ');
+http.CL = Buffer.from('Content-Length: ');
+http.CN = Buffer.from('Connection: ');
+http.CT = Buffer.from('Content-Type: ');
+http.CR = Buffer.from('Range: bytes=');
+http.HU = Buffer.from('urlencoded');
+http.HM = Buffer.from('multipart');
+http.HB = Buffer.from('boundary=');
+http.HF = Buffer.from('filename="');
+http.HN = Buffer.from('name="');
+http.IN = Buffer.from('If-None-Match: ');
+http.IM = Buffer.from('If-Modified-Since: ');
+http.EL = Buffer.from('0\r\n\r\n');
+
+/*status code RFC 7231*/
+http.code = {
+    100: '100 Continue',
+    101: '101 Switching Protocols',
+    200: '200 OK',
+    201: '201 Created',
+    202: '202 Accepted',
+    203: '203 Non-Authoritative Information',
+    204: '204 No Content',
+    205: '205 Reset Content',
+    206: '206 Partial Content',
+    300: '300 Multiple Choices',
+    301: '301 Moved Permanently',
+    302: '302 Found',
+    303: '303 See Other',
+    304: '304 Not Modified',
+    305: '305 Use Proxy',
+    307: '307 Temporary Redirect',
+    400: '400 Bad Request',
+    401: '401 Unauthorized',
+    402: '402 Payment Required',
+    403: '403 Forbidden',
+    404: '404 Not Found',
+    405: '405 Method Not Allowed',
+    406: '406 Not Acceptable',
+    407: '407 Proxy Authentication Required',
+    408: '408 Request Timeout',
+    409: '409 Conflict',
+    410: '410 Gone',
+    411: '411 Length Required',
+    412: '412 Precondition Failed',
+    413: '413 Payload Too Large',
+    414: '414 URI Too Long',
+    415: '415 Unsupported Media Type',
+    416: '416 Range Not Satisfiable',
+    417: '417 Expectation Failed',
+    426: '426 Upgrade Required',
+    500: '500 Internal Server Error',
+    501: '501 Not Implemented',
+    502: '502 Bad Gateway',
+    503: '503 Service Unavailable',
+    504: '504 Gateway Timeout',
+    505: '505 HTTP Version Not Supported'
+};
+
+/*common MIME Types*/
+http.type = {
+    'unknown': 'application/octet-stream',
+    /*text, UTF-8 is added for safety*/
+    'txt': 'text/plain; charset=UTF-8',
+    'html': 'text/html; charset=UTF-8',
+    'css': 'text/css; charset=UTF-8',
+    'js': 'text/javascript; charset=UTF-8',
+    'csv': 'text/csv; charset=UTF-8',
+    'rtx': 'text/richtext; charset=UTF-8',
+    /*application*/
+    'xml': 'application/xml',
+    'xhtml': 'application/xhtml+xml',
+    'rtf': 'application/rtf',
+    'json': 'application/json',
+    'jsonp': 'application/json-p',
+    'ttf': 'application/x-font-ttf',
+    'otf': 'application/x-font-opentype',
+    'woff': 'application/font-woff',
+    'doc': 'application/msword',
+    'm3u8': 'application/vnd.apple.mpegurl',
+    '7z': 'application/x-7z-compressed',
+    'air': 'application/vnd.adobe.air-application-installer-package+zip',
+    'swf': 'application/x-shockwave-flash',
+    'pdf': 'application/pdf',
+    'dir': 'application/x-director',
+    'apk': 'application/vnd.android.package-archive',
+    'mpkg': 'application/vnd.apple.installer+xml',
+    'atom': 'application/atom+xml',
+    'torrent': 'application/x-bittorrent',
+    'sh': 'application/x-sh',
+    'bz': 'application/x-bzip',
+    'bz2': 'application/x-bzip2',
+    'deb': 'application/x-debian-package',
+    'exe': 'application/x-msdownload',
+    'xls': 'application/vnd.ms-excel',
+    'mxml': 'application/xv+xml',
+    'ogx': 'application/ogg',
+    'rar': 'application/x-rar-compressed',
+    'rss': 'application/rss+xml',
+    'tar': 'application/x-tar',
+    'tcl': 'application/x-tcl',
+    'xslt': 'application/xslt+xml',
+    'zip': 'application/zip',
+    /*image*/
+    'ico': 'image/x-icon',
+    'gif': 'image/gif',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'bmp': 'image/bmp',
+    'png': 'image/png',
+    'svg': 'image/svg+xml',
+    'tiff': 'image/tiff',
+    'webp': 'image/webp',
+    'xif': 'image/vnd.xiff',
+    /*audio*/
+    'aac': 'audio/x-aac',
+    'dts': 'audio/vnd.dts',
+    'dtshd': 'audio/vnd.dts.hd',
+    'm3u': 'audio/x-mpegurl',
+    'wma': 'audio/x-ms-wma',
+    'mid': 'audio/midi',
+    'mpga': 'audio/mpeg',
+    'mp4a': 'audio/mp4',
+    'oga': 'audio/ogg',
+    'weba': 'audio/webm',
+    'ram': 'audio/x-pn-realaudio',
+    'wav': 'audio/x-wav',
+    /*video*/
+    'mp4': 'video/mp4',
+    'webm': 'video/webm',
+    'mpeg': 'video/mpeg',
+    'avi': 'video/x-msvideo',
+    '3gp': 'video/3gpp',
+    '3g2': 'video/3gpp2',
+    'f4v': 'video/x-f4v',
+    'flv': 'video/x-flv',
+    'm4v': 'video/x-m4v',
+    'h263': 'video/h263',
+    'h264': 'video/h264',
+    'asf': 'video/x-ms-asf',
+    'wm': 'video/x-ms-wm',
+    'wmx': 'video/x-ms-wmx',
+    'wmv': 'video/x-ms-wmv',
+    'wvx': 'video/x-ms-wvx',
+    'ogv': 'video/ogg',
+    'qt': 'video/quicktime',
+    'jpgv': 'video/jpeg'
+};
+
+module.exports = http;
