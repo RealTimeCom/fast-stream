@@ -6,7 +6,9 @@ const Transform = require('stream').Transform,
     qs = require('querystring').parse,
     path = require('path'),
     fs = require('fs'),
-    crypto = require('crypto');
+    crypto = require('crypto'),
+    bs = require('bytes-stream'),
+    cs = require('chunks-stream');
 
 class http extends Transform {
     constructor(f, opt) {
@@ -403,11 +405,11 @@ http.prototype.send = function(q, s, body, header, code) {
                             }
                         });
                         if (range) {
-                            body.src.pipe(new ranged(range)).pipe(new chunked(this.b)).pipe(this._readableState.pipes, {
+                            body.src.pipe(new bs(range)).pipe(new cs(this.b)).pipe(this._readableState.pipes, {
                                 end: false
                             });
                         } else {
-                            body.src.pipe(new chunked(this.b)).pipe(this._readableState.pipes, {
+                            body.src.pipe(new cs(this.b)).pipe(this._readableState.pipes, {
                                 end: false
                             });
                         }
@@ -433,7 +435,7 @@ http.prototype.send = function(q, s, body, header, code) {
                                 this.unpipe(); /*stop sending data*/
                             }
                         }).
-                        pipe(new chunked(this.b)). /*insert chunk bytes*/
+                        pipe(new cs(this.b)). /*insert chunk bytes*/
                         pipe(this._readableState.pipes, {
                             end: false
                         });
@@ -483,7 +485,7 @@ http.prototype.send = function(q, s, body, header, code) {
                             }
                         });
                         if (range) {
-                            body.src.pipe(new ranged(range)).pipe(this._readableState.pipes, {
+                            body.src.pipe(new bs(range)).pipe(this._readableState.pipes, {
                                 end: false
                             });
                         } else {
