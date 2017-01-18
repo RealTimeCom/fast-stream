@@ -40,10 +40,6 @@ class http extends Transform {
     }
 }
 http.prototype._transform = function(chunk, enc, cb) {
-    if (this.q === Number.MAX_SAFE_INTEGER) {
-        this.q = 0;
-    }
-    this.q++;
     if (this.c.length + chunk.length > this.l) {
         this.error(413);
     } else {
@@ -66,8 +62,7 @@ http.prototype._transform = function(chunk, enc, cb) {
                     this.error(400);
                 } else if (!this.s.header.hostname && this.s.request.protocol === 'HTTP/1.1') { /*"Host" header required for HTTP/1.1*/
                     this.error(400);
-                }
-                else {
+                } else {
                     let p = parse(this.s.request.uri, true);
                     this.s['path'] = p.pathname;
                     this.s['query'] = p.query;
@@ -86,6 +81,10 @@ http.prototype._transform = function(chunk, enc, cb) {
                         this.s['hostname'] = this.s.header.hostname ? this.s.header.hostname : p.hostname;
                         this.s['host'] = this.s['hostname'] + ':' + this.s['port'];
                         if (this.s.host in this.f) {
+                            if (this.q === Number.MAX_SAFE_INTEGER) {
+                                this.q = 0;
+                            }
+                            this.q++; /*new request found*/
                             if (this.s.request.method === 'HEAD' || this.s.request.method === 'GET') { /*HEAD is same as GET, but only header data is sent*/
                                 this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
                                 this.fc('GET');
@@ -239,4 +238,300 @@ http.prototype.fileLength = function(q, s, body, header, code) {
             'Content-Type': http.type.txt
         }, 404);
     }
+};
+
+http.prototype.send = function(q, s, body, header, code) {
+    //console.log('send',this.q,q);//,body,header,code
+    if (this.w && this.q === q) { /*connection open, no new request found*/
+        if (typeof body === 'object' && typeof body.src === 'string' && typeof body.length !== 'number') { /*file without length*/
+            this.fileLength(q, s, body, header, code); /*verify file and get the length*/
+            return; /*exit*/
+        }
+        /*verify http status code value*/
+        code = code ? parseInt(code) : 200;
+        if (!(code in http.code)) {
+            throw new Error('invalid http status code: ' + code);
+        }
+        /*verify header value*/
+        if (!(header && typeof header === 'object')) {
+            header = {};/*init*/
+        }
+        /*make custom error message*/
+        let src = false,
+            m = s.host + ' ' + s.request.protocol + ' ' + s.request.method + ' ' + s.path;
+        if (code >= 400) {
+            if (this.i) {
+                header['Connection'] = 'close';
+            } /*close connection*/
+            this.emit(this.e, new Error(code + ' ' + m)); /*emit custom error event*/
+        }
+        /*verify body value*/
+        if (!Buffer.isBuffer(body)) {
+            if (typeof body === 'string') {
+                body = Buffer.from(body);
+            } else if (http.isSource(body)) {
+                src = true;
+                if (!('length' in body)) {
+                    body.length = -1; /*don't send "Accept-Ranges" header if length=-1*/
+                }
+            } else { /*convert body value*/
+                body = Buffer.from(body + '');
+            }
+        }
+        let cached = false,
+            l = 'Content-Length' in header ? parseInt(header['Content-Length']) : body.length;
+
+        if (this.t) { /*cache enabled, compare ETag and Last-Modified values*/
+            if (!src && !('ETag' in header)) {
+                header['ETag'] = http.etag(body);
+            } /*ETag not found, create*/
+            if (s.header.etag && s.header.modified && 'ETag' in header && 'Last-Modified' in header) { /*verify both*/
+                if (s.header.etag === header['ETag'] && s.header.modified === header['Last-Modified']) {
+                    delete header['ETag'];
+                    delete header['Last-Modified'];
+                    cached = true;
+                }
+            } else { /*verify one of*/
+                if (s.header.etag && 'ETag' in header) {
+                    if (s.header.etag === header['ETag']) {
+                        delete header['ETag'];
+                        cached = true;
+                    }
+                }
+                if (s.header.modified && 'Last-Modified' in header) {
+                    if (s.header.modified === header['Last-Modified']) {
+                        delete header['Last-Modified'];
+                        cached = true;
+                    }
+                }
+            }
+        } else { /*cache disabled, delete "Last-Modified" and "ETag" header, if found*/
+            if ('Last-Modified' in header) {
+                delete header['Last-Modified'];
+            }
+            if ('ETag' in header) {
+                delete header['ETag'];
+            }
+        }
+        let a = [],
+            range = null,
+            x = s.request.protocol === 'HTTP/1.1' && s.header.connection === 'keep-alive' ? 'keep-alive' : 'close'; /*can not use "keep-alive" on HTTP/1.0*/
+
+        if (this.r && code === 200 && l > 0 && s.request.protocol === 'HTTP/1.1' && s.header.range) { /*range request*/
+            range = http.range(s.header.range, l);
+            if ('Last-Modified' in header) {/*for safety, disable client cache*/
+                delete header['Last-Modified'];
+            }
+            if ('ETag' in header) {/*for safety, disable client cache*/
+                delete header['ETag'];
+            }
+            if (range) {
+                a.push(s.request.protocol + ' ' + http.code[206]);
+                header['Content-Range'] = 'bytes ' + range[0] + '-' + (range[1] - 1) + '/' + l; /*set range header*/
+                l = range[1] - range[0]; /*update length*/
+                header['Content-Length'] = l;
+                if (!src) { /*not stream/file*/
+                    body = body.slice(range[0], range[1]);
+                }
+            } else { /*not in range*/
+                this.emit(this.e, new Error('416 ' + m)); /*emit custom error event*/
+                a.push(s.request.protocol + ' ' + http.code[416]);
+                header['Content-Range'] = 'bytes */' + l;
+                header['Accept-Ranges'] = 'bytes';
+                l = 0; /*send headers only*/
+                if (this.i) {
+                    x = 'close';
+                }
+            }
+        } else if (cached) { /*the request is cached in browser*/
+            a.push(s.request.protocol + ' ' + http.code[304]);
+        } else {
+            a.push(s.request.protocol + ' ' + http.code[code]);
+        }
+        if (!('Content-Type' in header)) { /*default "Content-Type" value text/html*/
+            header['Content-Type'] = http.type.html;
+        }
+        if (!('Date' in header)) {
+            header['Date'] = new Date().toUTCString();
+        }
+        if (!('Server' in header) && this.n) {
+            header['Server'] = this.n;
+        }
+        if (!('Content-Length' in header) && l >= 0) {
+            header['Content-Length'] = l;
+        }
+        if (!('Accept-Ranges' in header) && this.r && l > 0 && s.request.protocol === 'HTTP/1.1') {
+            header['Accept-Ranges'] = 'bytes'; /*Accept-Ranges if body length>0*/
+        }
+        header['Connection'] = x; /*for safety, overwrite header Connection value*/
+
+        if (s.request.method === 'HEAD' || cached || l === 0) { /*send only headers*/
+            for (let k in header) {
+                a.push(k + ': ' + header[k]);
+            }
+            this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L]));
+        } else {
+            if (this.b && s.request.protocol === 'HTTP/1.1' && (l === -1 || l > this.b)) { /*chunked*/
+                if ('Content-Length' in header) {
+                    delete header['Content-Length']; /*delete "Content-Length" header when chunked enabled*/
+                }
+                header['Transfer-Encoding'] = 'chunked'; /*set "Transfer-Encoding" header*/
+                for (let k in header) {
+                    a.push(k + ': ' + header[k]);
+                }
+                this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); /*send headers*/
+                if (src) {
+                    let t = this;
+                    if (typeof body.src === 'object') { /*is stream*/
+                        console.log('chunked src stream', this.b, range);
+                        /*EL bytes is sent, don't close connection*/
+                        body.src.
+                        on('error', function(e) { /*normaly, error event will end stream*/
+                            t.emit(t.e, e);
+                            if (t.w && t.q === q) {
+                                t.push(null); /*for safety, end socket stream*/
+                            }
+                        }).
+                        on('end', function() {
+                            if (x === 'close' && t.w && t.q === q) {
+                                t.push(null);
+                            } /*if Connection close, end socket stream*/
+                        }).
+                        on('readable', function() { /*on data*/
+                            if (t.q !== q) {
+                                this.unpipe(); /*stop sending data*/
+                            }
+                        });
+                        if (range) {
+                            body.src.pipe(new ranged(range)).pipe(new chunked(this.b)).pipe(this._readableState.pipes, {
+                                end: false
+                            });
+                        } else {
+                            body.src.pipe(new chunked(this.b)).pipe(this._readableState.pipes, {
+                                end: false
+                            });
+                        }
+                    } else {
+                        console.log('chunked src file', this.b, range);
+                        fs.createReadStream(body.src, range ? {
+                            start: range[0],
+                            end: range[1]
+                        } : {}).
+                        on('error', function(e) { /*normaly, error event will end stream*/
+                            t.emit(t.e, e);
+                            if (t.w && t.q === q) {
+                                t.push(null); /*for safety, end socket stream*/
+                            }
+                        }).
+                        on('end', function() {
+                            if (x === 'close' && t.w && t.q === q) {
+                                t.push(null); /*if Connection close, end socket stream*/
+                            }
+                        }).
+                        on('readable', function() { /*on data*/
+                            if (t.q !== q) {
+                                this.unpipe(); /*stop sending data*/
+                            }
+                        }).
+                        pipe(new chunked(this.b)). /*insert chunk bytes*/
+                        pipe(this._readableState.pipes, {
+                            end: false
+                        });
+                    }
+                } else {
+                    console.log('chunked', this.b, range);
+                    for (let y, i = 0; i < l; i += this.b) { /*for each chunk*/
+                        y = (l < i + this.b) ? l - i : this.b;
+                        if (this.w && this.q === q) {
+                            this.push(Buffer.concat([y === this.b ? this.g : Buffer.from(y.toString(16)), http.N, body.slice(i, i + y), http.N]));
+                        } else {
+                            break;
+                        }
+                    }
+                    if (this.w && this.q === q) {
+                        this.push(http.EL);
+                    } /*push end bytes*/
+                }
+            } else { /*default, send headers+body*/
+                if (src) {
+                    let t = this;
+                    if (typeof body.src === 'object') { /*is stream, range disabled*/
+                        console.log('src stream', range);
+                        if (l === -1) { /*unknown length, close connection*/
+                            x = 'close';
+                            header['Connection'] = x;
+                        }
+                        for (let k in header) {
+                            a.push(k + ': ' + header[k]);
+                        }
+                        this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); /*send headers*/
+                        body.src.
+                        on('error', function(e) { /*normaly, error event will end stream*/
+                            t.emit(t.e, e);
+                            if (t.w && t.q === q) {
+                                t.push(null); /*for safety, end socket stream*/
+                            }
+                        }).
+                        on('end', function() {
+                            if (x === 'close' && t.w && t.q === q) {
+                                t.push(null); /*if Connection close, end socket stream*/
+                            }
+                        }).
+                        on('readable', function() { /*on data*/
+                            if (t.q !== q) {
+                                this.unpipe(); /*stop sending data*/
+                            }
+                        });
+                        if (range) {
+                            body.src.pipe(new ranged(range)).pipe(this._readableState.pipes, {
+                                end: false
+                            });
+                        } else {
+                            body.src.pipe(this._readableState.pipes, {
+                                end: false
+                            });
+                        }
+                    } else {
+                        console.log('src file', range);
+                        for (let k in header) {
+                            a.push(k + ': ' + header[k]);
+                        }
+                        this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); /*send headers*/
+                        fs.createReadStream(body.src, range ? {
+                            start: range[0],
+                            end: range[1]
+                        } : {}).
+                        on('error', function(e) { /*normaly, error event will end stream*/
+                            t.emit(t.e, e);
+                            if (t.w && t.q === q) {
+                                t.push(null); /*for safety, end socket stream*/
+                            }
+                        }).
+                        on('end', function() {
+                            if (x === 'close' && t.w && t.q === q) {
+                                t.push(null); /*if Connection close, end socket stream*/
+                            }
+                        }).
+                        on('readable', function() { /*on data*/
+                            if (t.q !== q) { /*new request found*/
+                                this.unpipe(); /*stop sending data*/
+                            }
+                        }).
+                        pipe(this._readableState.pipes, {
+                            end: false /*non-blocking*/
+                        });
+                    }
+                } else {
+                    console.log('default', range);
+                    for (let k in header) {
+                        a.push(k + ': ' + header[k]);
+                    }
+                    this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L, body]));
+                }
+            }
+        }
+        if (!src && x === 'close' && this.w && this.q === q) {
+            this.push(null); /*close connection*/
+        }
+    } //else, discard, connection end | new client request found
 };
