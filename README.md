@@ -1,2 +1,2 @@
 # fast-stream
-Fast Stream
+Fast Stream HTTP Server

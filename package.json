@@ -1,0 +1,28 @@
+{
+  "name": "fast-stream",
+  "version": "1.0.0",
+  "description": "Fast Stream HTTP Server",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RealTimeCom/bytes-stream.git"
+  },
+  "keywords": [
+    "stream",
+    "fast",
+    "http",
+    "media",
+    "range",
+    "chunk",
+    "cache"
+  ],
+  "author": "Tanase Laurentiu Iulian <expertphp@gmail.com> (https://github.com/RealTimeCom)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/RealTimeCom/fast-stream/issues"
+  },
+  "homepage": "https://github.com/RealTimeCom/fast-stream"
+}
