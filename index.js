@@ -1,2 +1,2 @@
 'use static';
-console.log('test234');
+console.log('test');
