@@ -1,2 +1,2 @@
-# http-stream
-HTTP Stream
+# fast-stream
+Fast Stream
