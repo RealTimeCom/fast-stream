@@ -537,3 +537,120 @@ http.prototype.send = function(q, s, body, header, code) {
         }
     } //else, discard, connection end | new client request found
 };
+
+http.isSource = function(b) {
+    let r = false;
+    if (typeof b === 'object') {
+        let t = typeof b.src;
+        if (t === 'string') { /*file*/
+            r = true;
+        } else if (t === 'object') { /*readable stream*/
+            if ('readable' in b.src && b.src.readable === true && typeof b.src.on === 'function' && typeof b.src.read === 'function' && typeof b.src.pipe === 'function' && typeof b.src._readableState === 'object') {
+                r = true;
+            }
+        }
+    }
+    return r;
+};
+http.request = function(u) {
+    let method = undefined,
+        uri = undefined,
+        protocol = u.slice(u.length - 9).toString().trim();
+    if (protocol === 'HTTP/1.0' || protocol === 'HTTP/1.1') {
+        let i = u.indexOf(http.S);
+        if (i !== -1) {
+            method = u.slice(0, i).toString();
+            uri = u.slice(i + http.S.length, u.length - 9).toString().trim();
+        }
+    } else {
+        protocol = undefined;
+    }
+    return {
+        method: method,
+        uri: uri,
+        protocol: protocol
+    };
+};
+http.header = function(h) {
+    let i = 0,
+        n = 0,
+        a = [],
+        l = http.N.length;
+    while ((i = h.indexOf(http.N, i)) !== -1) {
+        a.push(h.slice(n, i));
+        i += l;
+        n = i;
+    }
+    if (n > 0) {
+        a.push(h.slice(n));
+    }
+    if (a.length === 0) {
+        a = [h];
+    }
+    /*for safety, set default values to undefined, if next node/js ver. will change it*/
+    let hostname = undefined,
+        port = undefined,
+        length = undefined,
+        connection = undefined,
+        type = undefined,
+        boundary = undefined,
+        etag = undefined,
+        modified = undefined,
+        range = undefined;
+    for (let k of a) {
+        if (hostname === undefined && k.indexOf(http.CH) === 0) { /*Host*/
+            let v = k.slice(http.CH.length),
+                j = v.indexOf(http.P);
+            if (j === -1) {
+                hostname = v.toString().trim().toLowerCase();
+            } else { /*port found in Host value*/
+                hostname = v.slice(0, j).toString().trim().toLowerCase();
+                port = parseInt(v.slice(j + http.P.length).toString().trim());
+            }
+        } else if (length === undefined && k.indexOf(http.CL) === 0) { /*Content-Length*/
+            length = parseInt(k.slice(http.CL.length).toString().trim());
+        } else if (connection === undefined && k.indexOf(http.CN) === 0) { /*Connection*/
+            connection = k.slice(http.CN.length).toString().trim().toLowerCase();
+        } else if (type === undefined && k.indexOf(http.CT) === 0) { /*Content-Type*/
+            if (k.indexOf(http.HU, http.CT.length) !== -1) {
+                type = 'urlencoded';
+            } else if (k.indexOf(http.HM, http.CT.length) !== -1) {
+                type = 'multipart';
+                let j = k.indexOf(http.HB, http.CT.length);
+                if (j !== -1) { /*boundary found*/
+                    let b = k.indexOf(http.B, j + http.HB.length);
+                    boundary = b === -1 ? k.slice(j + http.HB.length).toString().trim() : k.slice(j + http.HB.length, b).toString().trim();
+                }
+            }
+        } else if (etag === undefined && k.indexOf(http.IN) === 0) { /*If-None-Match*/
+            etag = k.slice(http.IN.length).toString().trim();
+        } else if (modified === undefined && k.indexOf(http.IM) === 0) { /*If-Modified-Since*/
+            modified = k.slice(http.IM.length).toString().trim();
+        } else if (range === undefined && k.indexOf(http.CR) === 0) { /*Range*/
+            range = k.slice(http.CR.length).toString().trim();
+        }
+    }
+    console.log({
+        hostname: hostname,
+        port: port,
+        length: length,
+        connection: connection,
+        type: type,
+        boundary: boundary,
+        etag: etag,
+        modified: modified,
+        range: range
+    });
+    return {
+        list: a,
+        hostname: hostname,
+        port: port,
+        length: length,
+        connection: connection,
+        type: type,
+        boundary: boundary,
+        etag: etag,
+        modified: modified,
+        range: range
+    };
+};
