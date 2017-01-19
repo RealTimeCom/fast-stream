@@ -54,7 +54,10 @@ const config = {
     'localhost:80': { /*hostname "localhost" port "80"*/
         POST: { /*method POST*/
             '/index.html': function host(cb, req) {
-                cb('<html><body><h3>' + this.remoteAddress + '</h3><code>' + JSON.stringify(req) + '</code></body></html>');
+                cb('<html><body>' +
+                    '<h3>' + this.remoteAddress + '</h3>' +
+                    '<code>' + JSON.stringify(req) + '</code>' +
+                    '</body></html>');
             }
         }
     }

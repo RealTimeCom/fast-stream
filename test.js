@@ -25,6 +25,59 @@ const config = {
             }),
             '/close': function() {
                 this.server.close();
+            },
+            '/index.html': cb => cb('<html><body>' +
+                '<form action="/post" method="post" enctype="multipart/form-data">' +
+                '<input type="text" name="t1"><input type="text" name="t2"><input type="text" name="t2">' +
+                '<input type="file" name="f1"><input type="file" name="f2"><input type="file" name="f2">' +
+                '<input type="submit" value="Submit">' +
+                '</form>' +
+                '<video controls><source src="1-480.mp4" type="video/mp4"></video>' +
+                '<video controls><source src="30-720.mp4" type="video/mp4"></video>' +
+                '<video controls><source src="4K.mp4" type="video/mp4"></video>' +
+                '</body></html>'),
+            '/chunk': cb => cb('0123456789', {
+                'Content-Type': http.type.txt
+            }),
+            '/c.txt': cb => {
+                cb({
+                    src: fs.createReadStream('/home/laur/c.txt'),
+                    length: 10
+                });
+            },
+            '/favicon.ico': cb => cb({
+                src: '/home/laur/favicon.ico'
+            }, {
+                'Content-Type': http.type['ico']
+            }),
+            '/1-480.mp4': cb => cb({
+                src: '/home/laur/1-480.mp4'
+            }, {
+                'Content-Type': http.type['mp4'],
+                'Content-Disposition': 'inline',
+                'Content-Duration': 5,
+                'X-Content-Duration': 5
+            }),
+            '/30-720.mp4': cb => cb({
+                src: '/home/laur/30-720.mp4'
+            }, {
+                'Content-Type': http.type['mp4'],
+                'Content-Disposition': 'inline',
+                'Content-Duration': 171,
+                'X-Content-Duration': 171
+            }),
+            '/4K.mp4': cb => cb({
+                src: '/home/laur/4K.mp4'
+            }, {
+                'Content-Type': http.type['mp4'],
+                'Content-Disposition': 'inline',
+                'Content-Duration': 10,
+                'X-Content-Duration': 10
+            })
+        },
+        POST: {
+            '/post': (cb, req) => {
+                cb('<html><body><code>' + JSON.stringify(req) + '</code></body></html>');
             }
         }
     }
