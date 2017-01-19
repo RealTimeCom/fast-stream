@@ -15,7 +15,7 @@ const config = {
                     server: this.server.address()
                 }) + '</code></body></html>');
             },
-            '/30-720.mp4': cb => cb({src: '30-720.mp4'}, {
+            '/30-720.mp4': cb => cb({src: '/home/laur/30-720.mp4'}, {
                 'Content-Type': http.type['mp4'],
                 'Content-Disposition': 'inline',
                 'Content-Duration': 171,
