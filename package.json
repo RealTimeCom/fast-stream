@@ -1,6 +1,6 @@
 {
   "name": "fast-stream",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "description": "Fast Stream HTTP Server",
   "main": "index.js",
   "scripts": {

@@ -1,4 +1,7 @@
 ## Fast Stream
+[![NPM](https://nodei.co/npm/fast-stream.png?downloads=true&downloadRank=true&stars=true)](https://nodei.co/npm/fast-stream/)
+
+[![Build Status](https://travis-ci.org/RealTimeCom/fast-stream.svg?branch=master)](http://travis-ci.org/RealTimeCom/fast-stream)
 
 **Fast Stream HTTP Server**
 
@@ -41,7 +44,7 @@ const config = {
     }
 };
 ```
-Function `host` arguments `cb`, `req` and `this` bind.
+Function `host` arguments `cb`, `req` and `this` bind example.
 ```js
 const config = {
     'localhost:80': { /*hostname "localhost" port "80"*/
@@ -53,33 +56,47 @@ const config = {
     }
 };
 ```
-### host (cb, req) `host function`
+### `http (config, options)` class
+* `config` Object - host functions list
+* `options` Object - see bellow
+
+### `host (cb, req)` host function
 * `cb` Function - callback function, see bellow
 * `req` Object - request, see bellow
 * `this` Bind Object - pipe readable stream
 
-### cb (data, headers, code) `callback function`
+### `cb (data, headers, code)` callback function
 * `data` String|Buffer|Object - response, for `Object` see bellow
 * `headers` Object - optional, default null
 * `code` Number - optional, http status, default 200
 
-#### data `Object response`
+#### `data` Object response
 * `src` String|Object - `String` file path or `Object` readable stream
 * `length` Number - data size, required for `src` `Object` readable stream
 
-#### req `Object request`
+#### `req` Object request
 * `path` String
 * `query` Object
 * `host` String
 * `hostname` String
 * `port` Number
-* `attach` Object - when `req.request.method` is String:`POST`, see bellow
+* `attach` Object - when `req.request.method` is `POST`, see bellow
 * `request` Object - { `method`: String, `uri`: String, `protocol`: String }
 * `header` Object - { `list`: Array, `hostname`: String, `port`: Number, `length`: Number, `connection`: String, `type`: String, `boundary`: String, `etag`: String, `modified`: String, `range`: String }
 
-#### req.attach `Object attach`
-* when `req.header.type` is String:`urlencoded` - Object `querystring`
-* when `req.header.type` is String:`multipart` - Object { query: Object `querystring`, files: Array Object { name: String, data: Buffer } }
+#### `req.attach` Object attach
+* when `req.header.type` is `urlencoded` - Object `querystring`
+* when `req.header.type` is `multipart` - Object { query: Object `querystring`, files: Array Object { name: String, data: Buffer } }
+
+#### `options` Object http class argument
+* `highWaterMark` Number - internal stream buffer size, default `16384`
+* `limit` Number - request data maximum size, default `1e8` ~100MB
+* `ranges` Boolean - accept ranges request, default `true`
+* `error` String - custom error name event, default `httpError`
+* `name` String - Server name/version, default `fast-stream/1.1`, `null` - to disable
+* `cache` Boolean - send/verify "Last-Modified" and/or "ETag" header, default `true`
+* `closeOnError` Boolean - close connection on status `code` >= `400`, default `true`
+* `chunked` Number - if body response size is greater than this value, send "Transfer-Encoding: chunked", default `1e6` ~1MB, `null` - to disable
 
 --------------------------------------------------------
 **Fast Stream** is licensed under the MIT license. See the included `LICENSE` file for more details.

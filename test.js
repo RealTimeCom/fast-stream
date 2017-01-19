@@ -2,7 +2,8 @@
 'use strict';
 
 const http = require('./index.js'),
-    fs = require('fs');
+    fs = require('fs'),
+    net = require('net');
 
 const config = {
     '*': {
@@ -14,17 +15,22 @@ const config = {
                     server: this.server.address()
                 }) + '</code></body></html>');
             },
-            '/30-720.mp4': cb => cb({src: '/home/laur/30-720.mp4'}, {
+            '/30-720.mp4': cb => cb({
+                src: '/home/laur/30-720.mp4'
+            }, {
                 'Content-Type': http.type['mp4'],
                 'Content-Disposition': 'inline',
                 'Content-Duration': 171,
                 'X-Content-Duration': 171
-            })
+            }),
+            '/close': function() {
+                this.server.close();
+            }
         }
     }
 };
 
-require('net').createServer(c => {
+net.createServer(c => {
     console.log('client connected');
     c.
     on('error', e => console.log('socket error', e.toString())).
@@ -39,6 +45,11 @@ require('net').createServer(c => {
     pipe(c);
 }).
 on('error', e => console.log('server error', e.toString())).
+on('close', () => console.log('server close')).
 listen(80, function() {
     console.log('server start', this.address());
+    net.connect(80, function() {
+        console.log('client request');
+        this.end('GET /close HTTP/1.0\r\n\r\n');
+    });
 });

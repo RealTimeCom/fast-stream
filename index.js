@@ -26,7 +26,7 @@ class http extends Transform {
         this.l = 'limit' in opt ? parseInt(opt.limit) : 1e8; /*limit bytes, client request header+body maximum bytes, anti memory overhead*/
         this.r = 'ranges' in opt ? Boolean(opt.ranges) : true; /*accept ranges request, default true*/
         this.e = 'error' in opt ? opt.error + '' : 'httpError'; /*custom error name event | "error" name will throw the error and exit the process*/
-        this.n = 'name' in opt ? opt.name === null ? undefined : opt.name + '' : 'fast-stream/1.0'; /*Server name/version*/
+        this.n = 'name' in opt ? opt.name === null ? undefined : opt.name + '' : 'fast-stream/1.1'; /*Server name/version*/
         this.t = 'cache' in opt ? Boolean(opt.cache) : true; /*cache, default enabled, send/verify "Last-Modified" and/or "ETag" header*/
         this.i = 'closeOnError' in opt ? Boolean(opt.closeOnError) : true; /*close connection on error when code>=400, default true for safety, but less speed*/
         this.b = 'chunked' in opt ? parseInt(opt.chunked) : 1e6; /*chunk bytes, 0-disable*/
@@ -65,7 +65,13 @@ http.prototype._transform = function(chunk, enc, cb) {
                 } else if (!this.s.header.hostname && this.s.request.protocol === 'HTTP/1.1') { /*"Host" header required for HTTP/1.1*/
                     this.error(400);
                 } else {
+                    if (!this.s.header.hostname) {
+                        this.s.header['hostname'] = '*';
+                    }
                     let p = parse(this.s.request.uri, true);
+                    if (!p.hostname) {
+                        p['hostname'] = '*';
+                    }
                     this.s['path'] = p.pathname;
                     this.s['query'] = p.query;
                     /*resolve port*/
@@ -78,100 +84,95 @@ http.prototype._transform = function(chunk, enc, cb) {
                     } else {
                         this.s['port'] = 80; /*set default port 80*/
                     }
-                    if (this.s.header.hostname || p.hostname) {
-                        this.s['hostname'] = this.s.header.hostname ? this.s.header.hostname : p.hostname;
-                        this.s['host'] = this.s['hostname'] + ':' + this.s['port'];
-                        /*resolve host*/
+                    this.s['hostname'] = this.s.header.hostname === '*' ? p.hostname : this.s.header.hostname;
+                    this.s['host'] = this.s['hostname'] + ':' + this.s['port'];
+                    /*resolve host*/
+                    if (!(this.s.host in this.f)) {
+                        this.s.host = this.s['hostname'];
                         if (!(this.s.host in this.f)) {
-                            this.s.host = this.s['hostname'];
+                            this.s.host = '*:' + this.s['port'];
                             if (!(this.s.host in this.f)) {
-                                this.s.host = '*:' + this.s['port'];
-                                if (!(this.s.host in this.f)) {
-                                    this.s.host = '*';
-                                }
+                                this.s.host = '*';
                             }
                         }
-                        if (this.s.host in this.f) {
-                            if (this.q === Number.MAX_SAFE_INTEGER) {
-                                this.q = 0;
-                            }
-                            this.q++; /*new request found*/
-                            if (this.s.request.method === 'HEAD' || this.s.request.method === 'GET') { /*HEAD is same as GET, but only header data is sent*/
-                                this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
-                                this.fc('GET');
-                            } else if (this.s.request.method === 'OPTIONS') {
-                                this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
-                                if (this.s.path === '*') { /*request methods supported by server*/
-                                    this.send(this.q, this.s, 'GET, HEAD, POST', {
-                                        'Content-Type': http.type.txt,
-                                        Allow: 'GET, HEAD, POST'
-                                    });
-                                } else { /*request methods supported by pathname*/
-                                    let c = [];
-                                    if (typeof this.f[this.s.host][404] === 'function') {
-                                        c.push('GET', 'HEAD', 'POST');
-                                    } else {
-                                        if ('GET' in this.f[this.s.host] && typeof this.f[this.s.host]['GET'][this.s.path] === 'function') {
-                                            c.push('GET', 'HEAD'); /*HEAD is same as GET*/
-                                        }
-                                        if ('POST' in this.f[this.s.host] && typeof this.f[this.s.host]['POST'][this.s.path] === 'function') {
-                                            c.push('POST');
-                                        }
-                                    }
-                                    if (c.length === 0) {
-                                        this.error(405);
-                                    } else {
-                                        this.send(this.q, this.s, c.join(', '), {
-                                            'Content-Type': http.type.txt,
-                                            Allow: c.join(', ')
-                                        });
-                                    }
-                                }
-                            } else if (this.s.request.method === 'POST') {
-                                if ('length' in this.s.header && this.s.header.length) { /*"Content-Length" header required for POST*/
-                                    if (this.s.header.length > this.l) {
-                                        this.error(413);
-                                    } /*"Content-Length" exceed the limit*/
-                                    else if (this.s.header.type === undefined) {
-                                        this.error(400);
-                                    } /*"Content-Type" header required for POST*/
-                                    else if (this.s.header.type === 'multipart' && this.s.header.boundary === undefined) {
-                                        this.error(400);
-                                    } /*no boundary found in multipart*/
-                                    else {
-                                        let body = this.c.slice(i + http.L.length);
-                                        if (body.length >= this.s.header.length) { /*body complete*/
-                                            if (body.length > this.s.header.length) {
-                                                body = body.slice(0, this.s.header.length);
-                                                this.c = body.slice(this.s.header.length); /*cache remaining bytes, for next request*/
-                                            } else {
-                                                this.c = this.z; /*empty cache*/
-                                            }
-                                            this.s['attach'] = this.s.header.type === 'multipart' ? http.parse(body, this.s.header.boundary) : qs(body.toString());
-                                            this.fc('POST');
-                                        } else { /*need more bytes for body*/
-                                            this.h = false; /*next chunk is body*/
-                                            this.c = body; /*save body part to cache*/
-                                        }
-                                    }
+                    }
+                    if (this.s.host in this.f) {
+                        if (this.q === Number.MAX_SAFE_INTEGER) {
+                            this.q = 0;
+                        }
+                        this.q++; /*new request found*/
+                        if (this.s.request.method === 'HEAD' || this.s.request.method === 'GET') { /*HEAD is same as GET, but only header data is sent*/
+                            this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
+                            this.fc('GET');
+                        } else if (this.s.request.method === 'OPTIONS') {
+                            this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
+                            if (this.s.path === '*') { /*request methods supported by server*/
+                                this.send(this.q, this.s, 'GET, HEAD, POST', {
+                                    'Content-Type': http.type.txt,
+                                    Allow: 'GET, HEAD, POST'
+                                });
+                            } else { /*request methods supported by pathname*/
+                                let c = [];
+                                if (typeof this.f[this.s.host][404] === 'function') {
+                                    c.push('GET', 'HEAD', 'POST');
                                 } else {
-                                    this.error(411);
+                                    if ('GET' in this.f[this.s.host] && typeof this.f[this.s.host]['GET'][this.s.path] === 'function') {
+                                        c.push('GET', 'HEAD'); /*HEAD is same as GET*/
+                                    }
+                                    if ('POST' in this.f[this.s.host] && typeof this.f[this.s.host]['POST'][this.s.path] === 'function') {
+                                        c.push('POST');
+                                    }
                                 }
-                            } else if (this.s.request.method === 'PUT' || this.s.request.method === 'DELETE' || this.s.request.method === 'TRACE' || this.s.request.method === 'CONNECT') {
-                                /* TODO */
-                                this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
-                                this.error(501);
-                            } else {
-                                this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
-                                this.error(405);
+                                if (c.length === 0) {
+                                    this.error(405);
+                                } else {
+                                    this.send(this.q, this.s, c.join(', '), {
+                                        'Content-Type': http.type.txt,
+                                        Allow: c.join(', ')
+                                    });
+                                }
                             }
+                        } else if (this.s.request.method === 'POST') {
+                            if ('length' in this.s.header && this.s.header.length) { /*"Content-Length" header required for POST*/
+                                if (this.s.header.length > this.l) {
+                                    this.error(413);
+                                } /*"Content-Length" exceed the limit*/
+                                else if (this.s.header.type === undefined) {
+                                    this.error(400);
+                                } /*"Content-Type" header required for POST*/
+                                else if (this.s.header.type === 'multipart' && this.s.header.boundary === undefined) {
+                                    this.error(400);
+                                } /*no boundary found in multipart*/
+                                else {
+                                    let body = this.c.slice(i + http.L.length);
+                                    if (body.length >= this.s.header.length) { /*body complete*/
+                                        if (body.length > this.s.header.length) {
+                                            body = body.slice(0, this.s.header.length);
+                                            this.c = body.slice(this.s.header.length); /*cache remaining bytes, for next request*/
+                                        } else {
+                                            this.c = this.z; /*empty cache*/
+                                        }
+                                        this.s['attach'] = this.s.header.type === 'multipart' ? http.parse(body, this.s.header.boundary) : qs(body.toString());
+                                        this.fc('POST');
+                                    } else { /*need more bytes for body*/
+                                        this.h = false; /*next chunk is body*/
+                                        this.c = body; /*save body part to cache*/
+                                    }
+                                }
+                            } else {
+                                this.error(411);
+                            }
+                        } else if (this.s.request.method === 'PUT' || this.s.request.method === 'DELETE' || this.s.request.method === 'TRACE' || this.s.request.method === 'CONNECT') {
+                            /* TODO */
+                            this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
+                            this.error(501);
                         } else {
                             this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
-                            this.error(404);
+                            this.error(405);
                         }
-                    } else { /*Host not found*/
+                    } else {
                         this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
-                        this.error(400);
+                        this.error(404);
                     }
                 }
             } /*need more bytes for header*/
