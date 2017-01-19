@@ -11,7 +11,7 @@ const http = require('fast-stream');
 
 const config = {
   'localhost:80':{ // hostname:port
-    404: cb => cb('<html><body><h3>Hello ' + this.remoteAddress + '</h3></body></html>', null, 200)
+    404: cb => cb('<html><body><h3>Hello World!</h3></body></html>', null, 200)
   }
 };
 
