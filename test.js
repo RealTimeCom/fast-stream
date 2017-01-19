@@ -14,7 +14,13 @@ const config = {
                     client: this.remoteAddress,
                     server: this.server.address()
                 }) + '</code></body></html>');
-            }
+            },
+            '/30-720.mp4': cb => cb({src: '30-720.mp4'}, {
+                'Content-Type': http.type['mp4'],
+                'Content-Disposition': 'inline',
+                'Content-Duration': 171,
+                'X-Content-Duration': 171
+            })
         }
     }
 
@@ -26,7 +32,7 @@ require('net').createServer(c => {
     on('error', e => console.log('socket error', e.toString())).
     on('end', () => console.log('socket end')).
     on('close', () => console.log('socket close')).
-    pipe(new http(fc, {
+    pipe(new http(config, {
         limit: 1e4,
         chunked: 1e5,
         highWaterMark: 1e6
