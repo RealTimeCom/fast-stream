@@ -5,9 +5,8 @@ const http = require('./index.js'),
     fs = require('fs');
 
 const config = {
-
-    '192.168.56.101:80': { // hostname:port
-        404: (cb, req) => cb('<html><body><h3>404 Not Found</h3><code>' + JSON.stringify(req) + '</code></body></html>', null, 404), //optional, default 404 page for this host
+    '*': {
+        404: cb => cb('<html><body><h3>404 Not Found</h3></body></html>', null, 404), //optional, default 404 page
         GET: {
             '/': function(cb, req) {
                 cb('<html><body><code>' + JSON.stringify(req) + '</code><code>' + JSON.stringify({
@@ -23,7 +22,6 @@ const config = {
             })
         }
     }
-
 };
 
 require('net').createServer(c => {
@@ -41,6 +39,6 @@ require('net').createServer(c => {
     pipe(c);
 }).
 on('error', e => console.log('server error', e.toString())).
-listen(80, '192.168.56.101', function() {
+listen(80, function() {
     console.log('server start', this.address());
 });

@@ -78,10 +78,19 @@ http.prototype._transform = function(chunk, enc, cb) {
                     } else {
                         this.s['port'] = 80; /*set default port 80*/
                     }
-                    /*resolve hostname*/
                     if (this.s.header.hostname || p.hostname) {
                         this.s['hostname'] = this.s.header.hostname ? this.s.header.hostname : p.hostname;
                         this.s['host'] = this.s['hostname'] + ':' + this.s['port'];
+                        /*resolve host*/
+                        if (!(this.s.host in this.f)) {
+                            this.s.host = this.s['hostname'];
+                            if (!(this.s.host in this.f)) {
+                                this.s.host = '*:' + this.s['port'];
+                                if (!(this.s.host in this.f)) {
+                                    this.s.host = '*';
+                                }
+                            }
+                        }
                         if (this.s.host in this.f) {
                             if (this.q === Number.MAX_SAFE_INTEGER) {
                                 this.q = 0;
@@ -99,11 +108,15 @@ http.prototype._transform = function(chunk, enc, cb) {
                                     });
                                 } else { /*request methods supported by pathname*/
                                     let c = [];
-                                    if ('GET' in this.f[this.s.host] && typeof this.f[this.s.host]['GET'][this.s.path] === 'function') {
-                                        c.push('GET', 'HEAD');
-                                    } /*HEAD is same as GET*/
-                                    if ('POST' in this.f[this.s.host] && typeof this.f[this.s.host]['POST'][this.s.path] === 'function') {
-                                        c.push('POST');
+                                    if (typeof this.f[this.s.host][404] === 'function') {
+                                        c.push('GET', 'HEAD', 'POST');
+                                    } else {
+                                        if ('GET' in this.f[this.s.host] && typeof this.f[this.s.host]['GET'][this.s.path] === 'function') {
+                                            c.push('GET', 'HEAD'); /*HEAD is same as GET*/
+                                        }
+                                        if ('POST' in this.f[this.s.host] && typeof this.f[this.s.host]['POST'][this.s.path] === 'function') {
+                                            c.push('POST');
+                                        }
                                     }
                                     if (c.length === 0) {
                                         this.error(405);
@@ -385,7 +398,7 @@ http.prototype.send = function(q, s, body, header, code) {
                 if (src) {
                     let t = this;
                     if (typeof body.src === 'object') { /*is stream*/
-                        console.log('chunked src stream', this.b, range);
+                        //console.log('chunked src stream', this.b, range);
                         /*EL bytes is sent, don't close connection*/
                         body.src.
                         on('error', function(e) { /*normaly, error event will end stream*/
@@ -414,7 +427,7 @@ http.prototype.send = function(q, s, body, header, code) {
                             });
                         }
                     } else {
-                        console.log('chunked src file', this.b, range);
+                        //console.log('chunked src file', this.b, range);
                         fs.createReadStream(body.src, range ? {
                             start: range[0],
                             end: range[1]
@@ -441,7 +454,7 @@ http.prototype.send = function(q, s, body, header, code) {
                         });
                     }
                 } else {
-                    console.log('chunked', this.b, range);
+                    //console.log('chunked', this.b, range);
                     for (let y, i = 0; i < l; i += this.b) { /*for each chunk*/
                         y = (l < i + this.b) ? l - i : this.b;
                         if (this.w && this.q === q) {
@@ -458,7 +471,7 @@ http.prototype.send = function(q, s, body, header, code) {
                 if (src) {
                     let t = this;
                     if (typeof body.src === 'object') { /*is stream, range disabled*/
-                        console.log('src stream', range);
+                        //console.log('src stream', range);
                         if (l === -1) { /*unknown length, close connection*/
                             x = 'close';
                             header['Connection'] = x;
@@ -494,7 +507,7 @@ http.prototype.send = function(q, s, body, header, code) {
                             });
                         }
                     } else {
-                        console.log('src file', range);
+                        //console.log('src file', range);
                         for (let k in header) {
                             a.push(k + ': ' + header[k]);
                         }
@@ -524,7 +537,7 @@ http.prototype.send = function(q, s, body, header, code) {
                         });
                     }
                 } else {
-                    console.log('default', range);
+                    //console.log('default', range);
                     for (let k in header) {
                         a.push(k + ': ' + header[k]);
                     }
@@ -630,17 +643,6 @@ http.header = function(h) {
             range = k.slice(http.CR.length).toString().trim();
         }
     }
-    console.log({
-        hostname: hostname,
-        port: port,
-        length: length,
-        connection: connection,
-        type: type,
-        boundary: boundary,
-        etag: etag,
-        modified: modified,
-        range: range
-    });
     return {
         list: a,
         hostname: hostname,
