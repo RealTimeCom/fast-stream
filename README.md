@@ -3,7 +3,7 @@
 **Fast Stream HTTP Server**
 
 ```sh
-$ npm install fast-stream
+$ npm install fast-stream bytes-stream chunks-stream
 ```
 Simple configuration, serve all requests from `404` with `200` OK.
 ```js
