@@ -46,9 +46,10 @@ net.createServer(c => {
 }).
 on('error', e => console.log('server error', e.toString())).
 on('close', () => console.log('server close')).
-listen(80, function() {
-    console.log('server start', this.address());
-    net.connect(80, function() {
+listen(function() {
+    let a = this.address();
+    console.log('server start', a);
+    net.connect(a.port, a.address, function() {
         console.log('client request');
         this.end('GET /close HTTP/1.0\r\n\r\n');
     });
