@@ -64,15 +64,15 @@ const config = {
 ```
 ### `http (config, options)` class
 * `config` Object - host functions list, see the examples above
-* `options` Object - see bellow
+* `options` Object - see below
 
 ### `host (cb, req)` host function
 * `cb` Function - callback function, see below
-* `req` Object - request, see bellow
+* `req` Object - request, see below
 * `this` Bind Object - pipe readable stream
 
 ### `cb (data, headers, code)` callback function
-* `data` String|Buffer|Object - response, for `Object` see bellow
+* `data` String|Buffer|Object - response, for `Object` see below
 * `headers` Object - optional, default null
 * `code` Number - optional, http status, default 200
 
@@ -86,7 +86,7 @@ const config = {
 * `host` String
 * `hostname` String
 * `port` Number
-* `attach` Object - when `req.request.method` is `POST`, see bellow
+* `attach` Object - when `req.request.method` is `POST`, see below
 * `request` Object - { `method`: String, `uri`: String, `protocol`: String }
 * `header` Object - { `list`: Array, `hostname`: String, `port`: Number, `length`: Number, `connection`: String, `type`: String, `boundary`: String, `etag`: String, `modified`: String, `range`: String }
 
