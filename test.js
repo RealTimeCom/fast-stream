@@ -15,14 +15,6 @@ const config = {
                     server: this.server.address()
                 }) + '</code></body></html>');
             },
-            '/30-720.mp4': cb => cb({
-                src: '/home/laur/30-720.mp4'
-            }, {
-                'Content-Type': http.type['mp4'],
-                'Content-Disposition': 'inline',
-                'Content-Duration': 171,
-                'X-Content-Duration': 171
-            }),
             '/close': function() {
                 this.server.close();
             },
@@ -66,6 +58,14 @@ const config = {
                 'Content-Duration': 171,
                 'X-Content-Duration': 171
             }),
+            '/2-30-720.mp4': cb => cb({
+                src: fs.createReadStream('/home/laur/30-720.mp4')
+            }, {
+                'Content-Type': http.type['mp4'],
+                'Content-Disposition': 'inline',
+                'Content-Duration': 171,
+                'X-Content-Duration': 171
+            }),
             '/4K.mp4': cb => cb({
                 src: '/home/laur/4K.mp4'
             }, {
@@ -87,7 +87,10 @@ net.createServer(c => {
     console.log('client connected');
     c.
     on('error', e => console.log('socket error', e.toString())).
-    on('end', () => console.log('socket end')).
+    on('end', function() {
+        this.resume();
+        console.log('socket end');
+    }).
     on('close', () => console.log('socket close')).
     pipe(new http(config, {
         limit: 1e4,

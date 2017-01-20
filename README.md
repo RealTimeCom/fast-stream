@@ -36,8 +36,7 @@ const config = {
                 'Content-Type': http.type['ico']
             }),
             '/vid.mp4': cb => cb({
-                src: fs.createReadStream('/dir/vid.mp4'), /*source: readable stream*/
-                length: 31491130 /*length (data size) required for readable stream*/
+                src: fs.createReadStream('/dir/vid.mp4') /*source: readable stream*/
             }, { /*additional headers*/
                 'Content-Type': http.type['mp4'],
                 'Content-Disposition': 'inline', /*display in browser*/
@@ -79,7 +78,7 @@ const config = {
 
 #### `data` Object response
 * `src` String|Object - `String` file path or `Object` readable stream
-* `length` Number - data size, required for `src` `Object` readable stream
+* `length` Number - optional, data size, required for range bytes when `src` is readable stream
 
 #### `req` Object request
 * `path` String
@@ -103,7 +102,7 @@ const config = {
 * `name` String - Server name/version, default `fast-stream/1.1`, `null` - to disable
 * `cache` Boolean - send/verify "Last-Modified" and/or "ETag" header, default `true`
 * `closeOnError` Boolean - close connection on status `code` >= `400`, default `true`
-* `chunked` Number - if body response size is greater than this value, send "Transfer-Encoding: chunked", default `1e6` ~1MB, `null` - to disable
+* `chunked` Number - if body response size is greater than this value, send "Transfer-Encoding: chunked", default `1e6` ~1MB, `0` - to disable
 
 --------------------------------------------------------
 **Fast Stream** is licensed under the MIT license. See the included `LICENSE` file for more details.

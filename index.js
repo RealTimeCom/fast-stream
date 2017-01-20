@@ -38,10 +38,13 @@ class http extends Transform {
         this.c = this.z; /*init empty cache buffer*/
         this.s = {}; /*data header request*/
         this.w = true; /*connection is open?*/
-        this.q = 0; /*data client request unique number*/
     }
 }
+
+//http.onEnd = function() { this.w = false; };
+
 http.prototype._transform = function(chunk, enc, cb) {
+    //if (!('header' in this.s)) { this._readableState.pipes.on('end', http.onEnd.bind(this)); }
     if (this.c.length + chunk.length > this.l) {
         this.error(413);
     } else {
@@ -81,8 +84,8 @@ http.prototype._transform = function(chunk, enc, cb) {
                         this.s['port'] = p.port;
                     } else if ('pipes' in this._readableState && 'localPort' in this._readableState.pipes) {
                         this.s['port'] = this._readableState.pipes.localPort;
-                    } else {
-                        this.s['port'] = 80; /*set default port 80*/
+                    } else { /*set default port 80*/
+                        this.s['port'] = 80;
                     }
                     this.s['hostname'] = this.s.header.hostname === '*' ? p.hostname : this.s.header.hostname;
                     this.s['host'] = this.s['hostname'] + ':' + this.s['port'];
@@ -97,17 +100,13 @@ http.prototype._transform = function(chunk, enc, cb) {
                         }
                     }
                     if (this.s.host in this.f) {
-                        if (this.q === Number.MAX_SAFE_INTEGER) {
-                            this.q = 0;
-                        }
-                        this.q++; /*new request found*/
                         if (this.s.request.method === 'HEAD' || this.s.request.method === 'GET') { /*HEAD is same as GET, but only header data is sent*/
                             this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
                             this.fc('GET');
                         } else if (this.s.request.method === 'OPTIONS') {
                             this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
                             if (this.s.path === '*') { /*request methods supported by server*/
-                                this.send(this.q, this.s, 'GET, HEAD, POST', {
+                                this.send(this.s, 'GET, HEAD, POST', {
                                     'Content-Type': http.type.txt,
                                     Allow: 'GET, HEAD, POST'
                                 });
@@ -126,7 +125,7 @@ http.prototype._transform = function(chunk, enc, cb) {
                                 if (c.length === 0) {
                                     this.error(405);
                                 } else {
-                                    this.send(this.q, this.s, c.join(', '), {
+                                    this.send(this.s, c.join(', '), {
                                         'Content-Type': http.type.txt,
                                         Allow: c.join(', ')
                                     });
@@ -135,22 +134,20 @@ http.prototype._transform = function(chunk, enc, cb) {
                         } else if (this.s.request.method === 'POST') {
                             if ('length' in this.s.header && this.s.header.length) { /*"Content-Length" header required for POST*/
                                 if (this.s.header.length > this.l) {
-                                    this.error(413);
-                                } /*"Content-Length" exceed the limit*/
-                                else if (this.s.header.type === undefined) {
-                                    this.error(400);
-                                } /*"Content-Type" header required for POST*/
-                                else if (this.s.header.type === 'multipart' && this.s.header.boundary === undefined) {
-                                    this.error(400);
-                                } /*no boundary found in multipart*/
+                                    this.error(413); /*"Content-Length" exceed the limit*/
+                                } else if (this.s.header.type === undefined) {
+                                    this.error(400); /*"Content-Type" header required for POST*/
+                                } else if (this.s.header.type === 'multipart' && this.s.header.boundary === undefined) {
+                                    this.error(400); /*no boundary found in multipart*/
+                                }
                                 else {
                                     let body = this.c.slice(i + http.L.length);
                                     if (body.length >= this.s.header.length) { /*body complete*/
                                         if (body.length > this.s.header.length) {
                                             body = body.slice(0, this.s.header.length);
                                             this.c = body.slice(this.s.header.length); /*cache remaining bytes, for next request*/
-                                        } else {
-                                            this.c = this.z; /*empty cache*/
+                                        } else { /*empty cache*/
+                                            this.c = this.z;
                                         }
                                         this.s['attach'] = this.s.header.type === 'multipart' ? http.parse(body, this.s.header.boundary) : qs(body.toString());
                                         this.fc('POST');
@@ -163,7 +160,7 @@ http.prototype._transform = function(chunk, enc, cb) {
                                 this.error(411);
                             }
                         } else if (this.s.request.method === 'PUT' || this.s.request.method === 'DELETE' || this.s.request.method === 'TRACE' || this.s.request.method === 'CONNECT') {
-                            /* TODO */
+                            /* todo */
                             this.c = this.c.slice(i + http.L.length); /*cache remaining bytes, for next request*/
                             this.error(501);
                         } else {
@@ -195,14 +192,14 @@ http.prototype._transform = function(chunk, enc, cb) {
     cb();
 };
 http.prototype._flush = function(cb) {
-    this.w = false; /*connection end, prevent any data to be sent*/
+    this.w = false;
     cb();
 };
 
 http.prototype.fc = function(method) {
     //this.c = this.z; /*empty cache*/
     let f = undefined; /*local function call*/
-    /*this.send.bind(this,this.q) > bind "this" object to send() function and push first argument "this.q" for callback send()*/
+    /*this.send.bind(this, this.s) > bind "this" object to send() function and push first argument "this.s" for callback send()*/
     if (method in this.f[this.s.host] && typeof this.f[this.s.host][method][this.s.path] === 'function') {
         f = this.f[this.s.host][method][this.s.path];
     } else if (typeof this.f[this.s.host][404] === 'function') {
@@ -211,18 +208,19 @@ http.prototype.fc = function(method) {
     if (f === undefined) { /*function call not found*/
         this.error(404);
     } else {
-        f.bind(this._readableState.pipes)(this.send.bind(this, this.q, this.s), this.s);
+        this._readableState.pipes.pause(); /*pause socket until server response back*/
+        f.bind(this._readableState.pipes)(this.send.bind(this, this.s), this.s);
     }
 };
 
 http.prototype.error = function(code) {
-    //this.c = this.z; /*empty cache*/
-    this.send(this.q, this.s, http.code[code], {
+    this._readableState.pipes.pause(); /*pause socket until server response back*/
+    this.send(this.s, http.code[code], {
         'Content-Type': http.type.txt
     }, code);
 };
 
-http.prototype.fileLength = function(q, s, body, header, code) {
+http.prototype.fileLength = function(s, body, header, code) {
     body.src = path.normalize(body.src.trim());
     //console.log('body.src', body.src);
     if (!(body.src === '.' || body.src === '..')) {
@@ -230,7 +228,7 @@ http.prototype.fileLength = function(q, s, body, header, code) {
         fs.lstat(body.src, function(e, d) {
             if (e) {
                 t.emit(t.e, new Error(e));
-                t.send(q, s, http.code[404], {
+                t.send(s, http.code[404], {
                     'Content-Type': http.type.txt
                 }, 404);
             } else {
@@ -246,21 +244,21 @@ http.prototype.fileLength = function(q, s, body, header, code) {
                     }
                 }
                 body.length = d.size;
-                t.send(q, s, body, header, code);
+                t.send(s, body, header, code);
             }
         });
     } else {
-        this.send(q, s, http.code[404], {
+        this.send(s, http.code[404], {
             'Content-Type': http.type.txt
         }, 404);
     }
 };
 
-http.prototype.send = function(q, s, body, header, code) {
-    //console.log('send',this.q,q);//,body,header,code
-    if (this.w && this.q === q) { /*connection open, no new request found*/
+http.prototype.send = function(s, body, header, code) {
+
+    if (this.w) { /*connection is open?*/
         if (typeof body === 'object' && typeof body.src === 'string' && typeof body.length !== 'number') { /*file without length*/
-            this.fileLength(q, s, body, header, code); /*verify file and get the length*/
+            this.fileLength(s, body, header, code); /*verify file and get the length*/
             return; /*exit*/
         }
         /*verify http status code value*/
@@ -276,9 +274,11 @@ http.prototype.send = function(q, s, body, header, code) {
         let src = false,
             m = s.host + ' ' + s.request.protocol + ' ' + s.request.method + ' ' + s.path;
         if (code >= 400) {
-            if (this.i) {
+            if (this.i) { /*close connection*/
                 header['Connection'] = 'close';
-            } /*close connection*/
+            } else if (code === 413) { /*force close connection*/
+                header['Connection'] = 'close';
+            }
             this.emit(this.e, new Error(code + ' ' + m)); /*emit custom error event*/
         }
         /*verify body value*/
@@ -385,7 +385,14 @@ http.prototype.send = function(q, s, body, header, code) {
             for (let k in header) {
                 a.push(k + ': ' + header[k]);
             }
-            this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L]));
+            if (this.w) {
+                this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L]));
+                if (x === 'close') {
+                    t.push(null);
+                } else if (this._readableState.pipes) {
+                    this._readableState.pipes.resume(); /*resume socket, get more data*/
+                }
+            }
         } else {
             if (this.b && s.request.protocol === 'HTTP/1.1' && (l === -1 || l > this.b)) { /*chunked*/
                 if ('Content-Length' in header) {
@@ -402,20 +409,24 @@ http.prototype.send = function(q, s, body, header, code) {
                         //console.log('chunked src stream', this.b, range);
                         /*EL bytes is sent, don't close connection*/
                         body.src.
-                        on('error', function(e) { /*normaly, error event will end stream*/
+                        on('error', function(e) {
                             t.emit(t.e, e);
-                            if (t.w && t.q === q) {
-                                t.push(null); /*for safety, end socket stream*/
-                            }
+                            this.unpipe();
+                            this.resume();
                         }).
                         on('end', function() {
-                            if (x === 'close' && t.w && t.q === q) {
-                                t.push(null);
-                            } /*if Connection close, end socket stream*/
+                            if (t.w) {
+                                if (x === 'close') {
+                                    t.push(null);
+                                } else if (t._readableState.pipes) {
+                                    t._readableState.pipes.resume();
+                                }
+                            }
                         }).
-                        on('readable', function() { /*on data*/
-                            if (t.q !== q) {
-                                this.unpipe(); /*stop sending data*/
+                        on('readable', function() {
+                            if (!t.w) {
+                                this.unpipe();
+                                this.resume();
                             }
                         });
                         if (range) {
@@ -433,20 +444,24 @@ http.prototype.send = function(q, s, body, header, code) {
                             start: range[0],
                             end: range[1]
                         } : {}).
-                        on('error', function(e) { /*normaly, error event will end stream*/
+                        on('error', function(e) {
                             t.emit(t.e, e);
-                            if (t.w && t.q === q) {
-                                t.push(null); /*for safety, end socket stream*/
-                            }
+                            this.unpipe();
+                            this.resume();
                         }).
                         on('end', function() {
-                            if (x === 'close' && t.w && t.q === q) {
-                                t.push(null); /*if Connection close, end socket stream*/
+                            if (t.w) {
+                                if (x === 'close') {
+                                    t.push(null);
+                                } else if (t._readableState.pipes) {
+                                    t._readableState.pipes.resume();
+                                }
                             }
                         }).
-                        on('readable', function() { /*on data*/
-                            if (t.q !== q) {
-                                this.unpipe(); /*stop sending data*/
+                        on('readable', function() {
+                            if (!t.w) {
+                                this.unpipe();
+                                this.resume();
                             }
                         }).
                         pipe(new cs(this.b)). /*insert chunk bytes*/
@@ -458,13 +473,13 @@ http.prototype.send = function(q, s, body, header, code) {
                     //console.log('chunked', this.b, range);
                     for (let y, i = 0; i < l; i += this.b) { /*for each chunk*/
                         y = (l < i + this.b) ? l - i : this.b;
-                        if (this.w && this.q === q) {
+                        if (this.w) {
                             this.push(Buffer.concat([y === this.b ? this.g : Buffer.from(y.toString(16)), http.N, body.slice(i, i + y), http.N]));
                         } else {
                             break;
                         }
                     }
-                    if (this.w && this.q === q) {
+                    if (this.w) {
                         this.push(http.EL);
                     } /*push end bytes*/
                 }
@@ -482,20 +497,24 @@ http.prototype.send = function(q, s, body, header, code) {
                         }
                         this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); /*send headers*/
                         body.src.
-                        on('error', function(e) { /*normaly, error event will end stream*/
+                        on('error', function(e) {
                             t.emit(t.e, e);
-                            if (t.w && t.q === q) {
-                                t.push(null); /*for safety, end socket stream*/
-                            }
+                            this.unpipe();
+                            this.resume();
                         }).
                         on('end', function() {
-                            if (x === 'close' && t.w && t.q === q) {
-                                t.push(null); /*if Connection close, end socket stream*/
+                            if (t.w) {
+                                if (x === 'close') {
+                                    t.push(null);
+                                } else if (t._readableState.pipes) {
+                                    t._readableState.pipes.resume();
+                                }
                             }
                         }).
-                        on('readable', function() { /*on data*/
-                            if (t.q !== q) {
-                                this.unpipe(); /*stop sending data*/
+                        on('readable', function() {
+                            if (!t.w) {
+                                this.unpipe();
+                                this.resume();
                             }
                         });
                         if (range) {
@@ -517,20 +536,24 @@ http.prototype.send = function(q, s, body, header, code) {
                             start: range[0],
                             end: range[1]
                         } : {}).
-                        on('error', function(e) { /*normaly, error event will end stream*/
+                        on('error', function(e) {
                             t.emit(t.e, e);
-                            if (t.w && t.q === q) {
-                                t.push(null); /*for safety, end socket stream*/
-                            }
+                            this.unpipe();
+                            this.resume(); /*non-blocking mode, consume remaining data, emit this "end" event*/
                         }).
                         on('end', function() {
-                            if (x === 'close' && t.w && t.q === q) {
-                                t.push(null); /*if Connection close, end socket stream*/
+                            if (t.w) {
+                                if (x === 'close') {
+                                    t.push(null); /*if Connection close, end pipe*/
+                                } else if (t._readableState.pipes) {
+                                    t._readableState.pipes.resume(); /*resume socket, get more data*/
+                                }
                             }
                         }).
-                        on('readable', function() { /*on data*/
-                            if (t.q !== q) { /*new request found*/
-                                this.unpipe(); /*stop sending data*/
+                        on('readable', function() {
+                            if (!t.w) { /*connection is close, resume() will emit this "end" event*/
+                                this.unpipe();
+                                this.resume(); /*non-blocking mode, consume remaining data*/
                             }
                         }).
                         pipe(this._readableState.pipes, {
@@ -545,9 +568,13 @@ http.prototype.send = function(q, s, body, header, code) {
                     this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L, body]));
                 }
             }
-        }
-        if (!src && x === 'close' && this.w && this.q === q) {
-            this.push(null); /*close connection*/
+            if (!src && this.w) {
+                if (x === 'close') {
+                    this.push(null); /*if Connection close, end pipe*/
+                } else if (this._readableState.pipes) {
+                    this._readableState.pipes.resume(); /*resume socket, get more data*/
+                }
+            }
         }
     } //else, discard, connection end | new client request found
 };
