@@ -82,7 +82,7 @@ const config = {
 
 #### `req` Object request
 * `path` String
-* `query` Object `querystring`
+* `query` Object - header `querystring`
 * `host` String
 * `hostname` String
 * `port` Number
@@ -91,7 +91,7 @@ const config = {
 * `header` Object - { `list`: Array, `hostname`: String, `port`: Number, `length`: Number, `connection`: String, `type`: String, `boundary`: String, `etag`: String, `modified`: String, `range`: String }
 
 #### `req.attach` Object attach
-* when `req.header.type` is `urlencoded` - Object `querystring`
+* when `req.header.type` is `urlencoded` - Object `querystring` from `POST` body
 * when `req.header.type` is `multipart` - Object { query: Object `querystring`, files: Array Object { name: String, data: Buffer } }
 
 #### `options` Object http class argument
