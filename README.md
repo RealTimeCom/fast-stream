@@ -67,7 +67,7 @@ const config = {
 * `options` Object - see bellow
 
 ### `host (cb, req)` host function
-* `cb` Function - callback function, see bellow
+* `cb` Function - callback function, see below
 * `req` Object - request, see bellow
 * `this` Bind Object - pipe readable stream
 
