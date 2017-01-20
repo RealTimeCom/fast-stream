@@ -29,7 +29,7 @@ class http extends Transform {
         this.n = 'name' in opt ? opt.name === null ? undefined : opt.name + '' : 'fast-stream/1.1'; /*Server name/version*/
         this.t = 'cache' in opt ? Boolean(opt.cache) : true; /*cache, default enabled, send/verify "Last-Modified" and/or "ETag" header*/
         this.i = 'closeOnError' in opt ? Boolean(opt.closeOnError) : true; /*close connection on error when code>=400, default true for safety, but less speed*/
-        this.b = 'chunked' in opt ? parseInt(opt.chunked) : 1e6; /*chunk bytes, 0-disable*/
+        this.b = 'chunked' in opt ? parseInt(opt.chunked) : 1e7; /*chunk bytes, 0-disable*/
         if (this.b) { /*convert chunk size into hex number*/
             this.g = Buffer.from(this.b.toString(16));
         }

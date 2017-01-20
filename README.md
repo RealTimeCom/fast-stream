@@ -63,7 +63,7 @@ const config = {
 };
 ```
 ### `http (config, options)` class
-* `config` Object - host functions list
+* `config` Object - host functions list, see the examples above
 * `options` Object - see bellow
 
 ### `host (cb, req)` host function
@@ -82,7 +82,7 @@ const config = {
 
 #### `req` Object request
 * `path` String
-* `query` Object
+* `query` Object `querystring`
 * `host` String
 * `hostname` String
 * `port` Number
@@ -96,13 +96,13 @@ const config = {
 
 #### `options` Object http class argument
 * `highWaterMark` Number - internal stream buffer size, default `16384`
-* `limit` Number - request data maximum size, default `1e8` ~100MB
+* `limit` Number - request data maximum size, default `1e8` ~100MB, for big data/files `POST`, consider to increase this value
 * `ranges` Boolean - accept ranges request, default `true`
 * `error` String - custom error name event, default `httpError`
 * `name` String - Server name/version, default `fast-stream/1.1`, `null` - to disable
 * `cache` Boolean - send/verify "Last-Modified" and/or "ETag" header, default `true`
 * `closeOnError` Boolean - close connection on status `code` >= `400`, default `true`
-* `chunked` Number - if body response size is greater than this value, send "Transfer-Encoding: chunked", default `1e6` ~1MB, `0` - to disable
+* `chunked` Number - if body response size is greater than this value, send "Transfer-Encoding: chunked", default `1e7` ~10MB, `0` - to disable
 
 --------------------------------------------------------
 **Fast Stream** is licensed under the MIT license. See the included `LICENSE` file for more details.
