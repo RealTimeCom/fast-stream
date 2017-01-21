@@ -28,47 +28,33 @@ const config = {
                 '<video controls><source src="30-720.mp4" type="video/mp4"></video>' +
                 '<video controls><source src="4K.mp4" type="video/mp4"></video>' +
                 '</body></html>'),
-            '/chunk': cb => cb('0123456789', {
-                'Content-Type': http.type.txt
-            }),
+            '/chunk': cb => cb('0123456789', { 'Content-Type': http.type.txt }),
             '/c.txt': cb => {
                 cb({
                     src: fs.createReadStream('/home/laur/c.txt'),
                     length: 10
                 });
             },
-            '/favicon.ico': cb => cb({
-                src: '/home/laur/favicon.ico'
-            }, {
-                'Content-Type': http.type['ico']
-            }),
-            '/1-480.mp4': cb => cb({
-                src: '/home/laur/1-480.mp4'
-            }, {
+            '/favicon.ico': cb => cb({ src: '/home/laur/favicon.ico' }, { 'Content-Type': http.type['ico'] }),
+            '/1-480.mp4': cb => cb({ src: '/home/laur/1-480.mp4' }, {
                 'Content-Type': http.type['mp4'],
                 'Content-Disposition': 'inline',
                 'Content-Duration': 5,
                 'X-Content-Duration': 5
             }),
-            '/30-720.mp4': cb => cb({
-                src: '/home/laur/30-720.mp4'
-            }, {
+            '/30-720.mp4': cb => cb({ src: '/home/laur/30-720.mp4' }, {
                 'Content-Type': http.type['mp4'],
                 'Content-Disposition': 'inline',
                 'Content-Duration': 171,
                 'X-Content-Duration': 171
             }),
-            '/2-30-720.mp4': cb => cb({
-                src: fs.createReadStream('/home/laur/30-720.mp4')
-            }, {
+            '/2-30-720.mp4': cb => cb({ src: fs.createReadStream('/home/laur/30-720.mp4') }, {
                 'Content-Type': http.type['mp4'],
                 'Content-Disposition': 'inline',
                 'Content-Duration': 171,
                 'X-Content-Duration': 171
             }),
-            '/4K.mp4': cb => cb({
-                src: '/home/laur/4K.mp4'
-            }, {
+            '/4K.mp4': cb => cb({ src: '/home/laur/4K.mp4' }, {
                 'Content-Type': http.type['mp4'],
                 'Content-Disposition': 'inline',
                 'Content-Duration': 10,
@@ -88,7 +74,7 @@ net.createServer(c => {
     c.
     on('error', e => console.log('socket error', e.toString())).
     on('end', function() {
-        this.resume();
+        //this.resume();
         console.log('socket end');
     }).
     on('close', () => console.log('socket close')).
