@@ -399,78 +399,15 @@ http.prototype.send = function(s, body, header, code) {
                     delete header['Content-Length']; /*delete "Content-Length" header when chunked enabled*/
                 }
                 header['Transfer-Encoding'] = 'chunked'; /*set "Transfer-Encoding" header*/
-                for (let k in header) {
-                    a.push(k + ': ' + header[k]);
-                }
-                this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); /*send headers*/
                 if (src) {
-                    let t = this;
-                    if (typeof body.src === 'object') { /*is stream*/
-                        //console.log('chunked src stream', this.b, range);
-                        /*EL bytes is sent, don't close connection*/
-                        body.src.
-                        on('error', function(e) {
-                            t.emit(t.e, e);
-                            this.unpipe();
-                            this.resume();
-                        }).
-                        on('end', function() {
-                            if (t.w) {
-                                if (x === 'close') {
-                                    t.push(null);
-                                } else if (t._readableState.pipes) {
-                                    t._readableState.pipes.resume();
-                                }
-                            }
-                        }).
-                        on('readable', function() {
-                            if (!t.w) {
-                                this.unpipe();
-                                this.resume();
-                            }
-                        });
-                        if (range) {
-                            body.src.pipe(new bs(range)).pipe(new cs(this.b)).pipe(this._readableState.pipes, {
-                                end: false
-                            });
-                        } else {
-                            body.src.pipe(new cs(this.b)).pipe(this._readableState.pipes, {
-                                end: false
-                            });
-                        }
-                    } else {
-                        //console.log('chunked src file', this.b, range);
-                        fs.createReadStream(body.src, range ? {
-                            start: range[0],
-                            end: range[1]
-                        } : {}).
-                        on('error', function(e) {
-                            t.emit(t.e, e);
-                            this.unpipe();
-                            this.resume();
-                        }).
-                        on('end', function() {
-                            if (t.w) {
-                                if (x === 'close') {
-                                    t.push(null);
-                                } else if (t._readableState.pipes) {
-                                    t._readableState.pipes.resume();
-                                }
-                            }
-                        }).
-                        on('readable', function() {
-                            if (!t.w) {
-                                this.unpipe();
-                                this.resume();
-                            }
-                        }).
-                        pipe(new cs(this.b)). /*insert chunk bytes*/
-                        pipe(this._readableState.pipes, {
-                            end: false
-                        });
-                    }
+                    this.stream(body.src, x, a, l, header, range, this.b);
                 } else {
-                    //console.log('chunked', this.b, range);
+                    console.log('chunked', this.b, range);
+                    for (let k in header) {
+                        a.push(k + ': ' + header[k]);
+                    }
+                    this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); /*send headers*/
+
                     for (let y, i = 0; i < l; i += this.b) { /*for each chunk*/
                         y = (l < i + this.b) ? l - i : this.b;
                         if (this.w) {
@@ -479,89 +416,15 @@ http.prototype.send = function(s, body, header, code) {
                             break;
                         }
                     }
-                    if (this.w) {
+                    if (this.w) { /*push end bytes*/
                         this.push(http.EL);
-                    } /*push end bytes*/
-                }
-            } else { /*default, send headers+body*/
-                if (src) {
-                    let t = this;
-                    if (typeof body.src === 'object') { /*is stream, range disabled*/
-                        //console.log('src stream', range);
-                        if (l === -1) { /*unknown length, close connection*/
-                            x = 'close';
-                            header['Connection'] = x;
-                        }
-                        for (let k in header) {
-                            a.push(k + ': ' + header[k]);
-                        }
-                        this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); /*send headers*/
-                        body.src.
-                        on('error', function(e) {
-                            t.emit(t.e, e);
-                            this.unpipe();
-                            this.resume();
-                        }).
-                        on('end', function() {
-                            if (t.w) {
-                                if (x === 'close') {
-                                    t.push(null);
-                                } else if (t._readableState.pipes) {
-                                    t._readableState.pipes.resume();
-                                }
-                            }
-                        }).
-                        on('readable', function() {
-                            if (!t.w) {
-                                this.unpipe();
-                                this.resume();
-                            }
-                        });
-                        if (range) {
-                            body.src.pipe(new bs(range)).pipe(this._readableState.pipes, {
-                                end: false
-                            });
-                        } else {
-                            body.src.pipe(this._readableState.pipes, {
-                                end: false
-                            });
-                        }
-                    } else {
-                        //console.log('src file', range);
-                        for (let k in header) {
-                            a.push(k + ': ' + header[k]);
-                        }
-                        this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); /*send headers*/
-                        fs.createReadStream(body.src, range ? {
-                            start: range[0],
-                            end: range[1]
-                        } : {}).
-                        on('error', function(e) {
-                            t.emit(t.e, e);
-                            this.unpipe();
-                            this.resume(); /*non-blocking mode, consume remaining data, emit this "end" event*/
-                        }).
-                        on('end', function() {
-                            if (t.w) {
-                                if (x === 'close') {
-                                    t.push(null); /*if Connection close, end pipe*/
-                                } else if (t._readableState.pipes) {
-                                    t._readableState.pipes.resume(); /*resume socket, get more data*/
-                                }
-                            }
-                        }).
-                        on('readable', function() {
-                            if (!t.w) { /*connection is close, resume() will emit this "end" event*/
-                                this.unpipe();
-                                this.resume(); /*non-blocking mode, consume remaining data*/
-                            }
-                        }).
-                        pipe(this._readableState.pipes, {
-                            end: false /*non-blocking*/
-                        });
                     }
+                }
+            } else { /*not-chunked*/
+                if (src) {
+                    this.stream(body.src, x, a, l, header, range, 0);
                 } else {
-                    //console.log('default', range);
+                    console.log('default', range);
                     for (let k in header) {
                         a.push(k + ': ' + header[k]);
                     }
@@ -577,6 +440,59 @@ http.prototype.send = function(s, body, header, code) {
             }
         }
     } //else, discard, connection end | new client request found
+};
+
+http.prototype.stream = function(src, x, a, l, header, range, chunked) {
+    let t = this,
+        f = (typeof src === 'string');
+    console.log(f ? 'file' : 'stream', x, chunked, range);
+    if (f) {
+        src = fs.createReadStream(src, range ? { start: range[0], end: range[1] } : {});
+    } else {
+        if (!chunked && l === -1) { /*unknown length, close connection*/
+            x = 'close';
+            header['Connection'] = x;
+        }
+    }
+    for (let k in header) {
+        a.push(k + ': ' + header[k]);
+    }
+    this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); /*send headers*/
+    src.
+    on('error', function(e) {
+        t.emit(t.e, e);
+        this.unpipe();
+        this.resume();
+    }).
+    on('end', function() {
+        if (t.w) {
+            this.unpipe();
+            if (x === 'close') {
+                t.push(null);
+            } else if (t._readableState.pipes) {
+                t._readableState.pipes.resume();
+            }
+        }
+    }).
+    on('readable', function() {
+        if (!t.w) {
+            this.unpipe();
+            this.resume();
+        }
+    });
+    if (!f && range) {
+        if (chunked) {
+            src.pipe(new bs(range)).pipe(new cs(chunked)).pipe(this._readableState.pipes, { end: false });
+        } else {
+            src.pipe(new bs(range)).pipe(this._readableState.pipes, { end: false });
+        }
+    } else {
+        if (chunked) {
+            src.pipe(new cs(chunked)).pipe(this._readableState.pipes, { end: false });
+        } else {
+            src.pipe(this._readableState.pipes, { end: false });
+        }
+    }
 };
 
 http.isSource = function(b) {
