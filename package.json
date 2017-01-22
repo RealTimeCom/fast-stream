@@ -1,28 +1,32 @@
 {
-  "name": "fast-stream",
-  "version": "1.1.5",
-  "description": "Fast Stream HTTP Server",
-  "main": "index.js",
-  "scripts": {
-    "test": "node test.js"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/RealTimeCom/fast-stream.git"
-  },
-  "keywords": [
-    "stream",
-    "fast",
-    "http",
-    "media",
-    "range",
-    "chunk",
-    "cache"
-  ],
-  "author": "Tanase Laurentiu Iulian <expertphp@gmail.com> (https://github.com/RealTimeCom)",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/RealTimeCom/fast-stream/issues"
-  },
-  "homepage": "https://github.com/RealTimeCom/fast-stream"
+    "name": "fast-stream",
+    "version": "1.1.6",
+    "description": "Fast Stream HTTP Server",
+    "main": "index.js",
+    "scripts": {
+        "test": "node test.js"
+    },
+    "dependencies": {
+        "bytes-stream": "~1.0.0",
+        "chunks-stream": "~1.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/RealTimeCom/fast-stream.git"
+    },
+    "keywords": [
+        "stream",
+        "fast",
+        "http",
+        "media",
+        "range",
+        "chunk",
+        "cache"
+    ],
+    "author": "Tanase Laurentiu Iulian <expertphp@gmail.com> (https://github.com/RealTimeCom)",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/RealTimeCom/fast-stream/issues"
+    },
+    "homepage": "https://github.com/RealTimeCom/fast-stream"
 }

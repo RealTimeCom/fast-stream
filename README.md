@@ -2,6 +2,7 @@
 [![NPM](https://nodei.co/npm/fast-stream.png?downloads=true&downloadRank=true&stars=true)](https://nodei.co/npm/fast-stream/)
 
 [![Build Status](https://travis-ci.org/RealTimeCom/fast-stream.svg?branch=master)](http://travis-ci.org/RealTimeCom/fast-stream)
+[![dependencies](https://david-dm.org/RealTimeCom/fast-stream.svg)](https://david-dm.org/RealTimeCom/fast-stream)
 
 **Fast Stream HTTP Server**
 
