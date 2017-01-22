@@ -9,10 +9,6 @@
 ```sh
 $ npm install fast-stream
 ```
-Additional required modules
-```sh
-$ npm install bytes-stream chunks-stream
-```
 Simple server configuration `config`, serve all requests with `200` OK.
 ```js
 const http = require('fast-stream');
