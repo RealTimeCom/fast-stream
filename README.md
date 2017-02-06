@@ -13,7 +13,7 @@ Simple server configuration `config`, serve all requests with `200` OK.
 ```js
 const http = require('fast-stream');
 const config = {
-    '*': { /*host name "*" <for all>, "cb" is the callback function*/
+    '*': { // host name "*" <for all>, "cb" is the callback function
         404: cb => cb('<html><body><h3>Hello World!</h3></body></html>', null, 200)
     }
 };
@@ -26,19 +26,19 @@ Sample `config` for files or readable streams.
 const http = require('fast-stream'), fs = require('fs');
 const config = {
     '*': {
-        GET: { /*method GET*/
+        GET: { // method GET
             '/favicon.ico': cb => cb({
-                src: '/dir/favicon.ico' /*source: file path*/
-            }, { /*additional header*/
+                src: '/dir/favicon.ico' // source: file path
+            }, { // additional header
                 'Content-Type': http.type['ico']
             }),
             '/vid.mp4': cb => cb({
-                src: fs.createReadStream('/dir/vid.mp4') /*source: readable stream*/
-            }, { /*additional headers*/
+                src: fs.createReadStream('/dir/vid.mp4') // source: readable Stream
+            }, { // additional headers
                 'Content-Type': http.type['mp4'],
-                'Content-Disposition': 'inline', /*display in browser*/
-                'Content-Duration': 171, /*required for web video player*/
-                'X-Content-Duration': 171  /*video duration in seconds*/
+                'Content-Disposition': 'inline', // display in browser
+                'Content-Duration': 171, // required for web video player
+                'X-Content-Duration': 171  // video duration in seconds
             })
         }
     }
@@ -47,8 +47,8 @@ const config = {
 Function `host` arguments `cb`, `req` and `this` bind example.
 ```js
 const config = {
-    'localhost:80': { /*hostname "localhost" port "80"*/
-        POST: { /*method POST*/
+    'localhost:80': { // hostname "localhost" port "80"
+        POST: { // method POST
             '/index.html': function host(cb, req) {
                 cb('<html><body>' +
                     '<h3>' + this.remoteAddress + '</h3>' +
