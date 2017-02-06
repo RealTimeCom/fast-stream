@@ -14,6 +14,7 @@ class http extends Transform {
     constructor(f, opt) {
         super();
         if (typeof this._readableState.pipes !== 'object') { throw new Error('no readable pipe found'); }
+        if (typeof opt !== 'object') { opt = {}; }
         this.f = f; // config functions
         this.l = 'limit' in opt ? parseInt(opt.limit) : 1e8; // limit bytes, client request header+body maximum bytes, anti memory overhead
         this.r = 'ranges' in opt ? Boolean(opt.ranges) : true; // accept ranges request, default true
