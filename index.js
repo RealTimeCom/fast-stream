@@ -197,7 +197,7 @@ http.prototype.fc = function(method) {
         this.error(404);
     } else {
         this._readableState.pipes.pause(); // pause socket until server response back
-        f.bind(this._readableState.pipes)(this.send.bind(this, this.s), this.s);
+        f.bind(this)(this.send.bind(this, this.s), this.s);
     }
 };
 

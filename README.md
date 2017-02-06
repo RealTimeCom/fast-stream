@@ -51,7 +51,7 @@ const config = {
         POST: { // method POST
             '/index.html': function host(cb, req) {
                 cb('<html><body>' +
-                    '<h3>' + this.remoteAddress + '</h3>' +
+                    '<h3>' + this.n + '</h3>' + // server name/version
                     '<code>' + JSON.stringify(req) + '</code>' +
                     '</body></html>');
             }
@@ -66,7 +66,7 @@ const config = {
 ### `host (cb, req)` host function
 * `cb` Function - callback function, see below
 * `req` Object - request, see below
-* `this` Bind Object - pipe readable stream
+* `this` Bind Object - this Stream
 
 ### `cb (data, headers, code)` callback function
 * `data` String|Buffer|Object - response, for `Object` see below

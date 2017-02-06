@@ -10,13 +10,15 @@ const config = {
         404: cb => cb('<html><body><h3>404 Not Found</h3></body></html>', null, 404), // optional, default 404 page
         GET: {
             '/': function(cb, req) {
-                cb('<html><body><code>' + JSON.stringify(req) + '</code><code>' + JSON.stringify({
-                    client: this.remoteAddress,
-                    server: this.server.address()
-                }) + '</code></body></html>');
+                if (this._readableState.pipes) {
+                    cb('<html><body><code>' + JSON.stringify(req) + '</code><code>' + JSON.stringify({
+                        client: this._readableState.pipes.remoteAddress,
+                        server: this._readableState.pipes.server.address()
+                    }) + '</code></body></html>');
+                }
             },
             '/close': function() {
-                this.server.close();
+                if (this._readableState.pipes) { this._readableState.pipes.server.close(); }
             },
             '/index.html': cb => cb('<html><body>' +
                 '<form action="/post" method="post" enctype="multipart/form-data">' +
@@ -77,8 +79,7 @@ net.createServer(c => {
     on('close', () => console.log('socket close')).
     pipe(new http(config, {
         limit: 1e4,
-        chunked: 1e5,
-        highWaterMark: 1e6
+        chunked: 1e5
     })).
     on('httpError', e => console.log('httpError', e.toString())).
     pipe(c);
