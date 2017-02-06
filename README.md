@@ -73,11 +73,11 @@ const config = {
 * `headers` Object - optional, default null
 * `code` Number - optional, http status, default 200
 
-#### `data` Object response
+### `data` Object response
 * `src` String|Object - `String` file path or `Object` readable stream
 * `length` Number - optional, data size, required for range bytes when `src` is readable stream
 
-#### `req` Object request
+### `req` Object request
 * `path` String
 * `query` Object - header `querystring`
 * `host` String
@@ -87,11 +87,11 @@ const config = {
 * `request` Object - { `method`: String, `uri`: String, `protocol`: String }
 * `header` Object - { `list`: Array, `hostname`: String, `port`: Number, `length`: Number, `connection`: String, `type`: String, `boundary`: String, `etag`: String, `modified`: String, `range`: String }
 
-#### `req.attach` Object attach
+### `req.attach` Object attach
 * when `req.header.type` is `urlencoded` - Object `querystring` from `POST` body
 * when `req.header.type` is `multipart` - Object { query: Object `querystring`, files: Array Object { name: String, data: Buffer } }
 
-#### `options` Object http class argument
+### `options` Object http class argument
 * `limit` Number - request data maximum size, default `1e8` ~100MB, for big data/files `POST`, consider to increase this value
 * `ranges` Boolean - accept ranges request, default `true`
 * `error` String - custom error name event, default `httpError`
