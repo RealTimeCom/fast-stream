@@ -7,7 +7,7 @@ const http = require('./index.js'),
 
 const config = {
     '*': {
-        404: cb => cb('<html><body><h3>404 Not Found</h3></body></html>', null, 404), //optional, default 404 page
+        404: cb => cb('<html><body><h3>404 Not Found</h3></body></html>', null, 404), // optional, default 404 page
         GET: {
             '/': function(cb, req) {
                 cb('<html><body><code>' + JSON.stringify(req) + '</code><code>' + JSON.stringify({
@@ -73,10 +73,7 @@ net.createServer(c => {
     console.log('client connected');
     c.
     on('error', e => console.log('socket error', e.toString())).
-    on('end', function() {
-        //this.resume();
-        console.log('socket end');
-    }).
+    on('end', () => console.log('socket end')).
     on('close', () => console.log('socket close')).
     pipe(new http(config, {
         limit: 1e4,
@@ -88,8 +85,8 @@ net.createServer(c => {
 }).
 on('error', e => console.log('server error', e.toString())).
 on('close', () => console.log('server close')).
-listen(function() {
-    let a = this.address();
+listen(function() { // server listen to a random port and adress
+    let a = this.address(); // get the server port and address
     console.log('server start', a);
     net.connect(a.port, a.address, function() {
         console.log('client request');
