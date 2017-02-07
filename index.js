@@ -374,7 +374,7 @@ http.prototype.send = function(s, body, header, code) {
             if (this.w) {
                 this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L]));
                 if (x === 'close') {
-                    t.push(null);
+                    this.push(null);
                 } else if (this._readableState.pipes) {
                     this._readableState.pipes.resume(); // resume socket, get more data
                 }
