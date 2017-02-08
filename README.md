@@ -48,13 +48,18 @@ Function `host` arguments `cb`, `req` and `this` bind example.
 ```js
 const config = {
     'localhost:80': { // hostname "localhost" port "80"
-        POST: { // method POST
+        POST: { // method POST, remove JSON.stringify(req) when POST big files > 1KB
             '/index.html': function host(cb, req) {
-                cb('<html><body>' +
-                    '<h3>' + this.n + '</h3>' + // server name/version
+                cb('<html><body>' + // client IP address
+                    '<h3>' + this._readableState.pipes.remoteAddress + '</h3>' +
                     '<code>' + JSON.stringify(req) + '</code>' +
                     '</body></html>');
             }
+        }
+    },
+    '127.0.0.1:80': { // another host
+        GET: { // URL: http://127.0.0.1/
+            '/': cb => cb('Request from 127.0.0.1:80', http.type.txt)
         }
     }
 };
