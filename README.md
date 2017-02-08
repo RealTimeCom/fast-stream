@@ -17,13 +17,13 @@ const config = {
         404: cb => cb('<html><body><h3>Hello World!</h3></body></html>', null, 200)
     }
 };
-require('net').createServer(
+require('net').createServer( // or require('tls') for HTTPS ( SSL )
     socket => socket.pipe(new http(config)).pipe(socket)
 ).listen(80);
 ```
 Sample `config` for files or readable streams.
 ```js
-const http = require('fast-stream'), fs = require('fs');
+const fs = require('fs');
 const config = {
     '*': {
         GET: { // method GET
