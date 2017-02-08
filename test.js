@@ -10,12 +10,11 @@ const config = {
         404: cb => cb('<html><body><h3>404 Not Found</h3></body></html>', null, 404), // optional, default 404 page
         GET: {
             '/': function(cb, req) {
-                if (this._readableState.pipes) {
-                    cb('<html><body><code>' + JSON.stringify(req) + '</code><code>' + JSON.stringify({
-                        client: this._readableState.pipes.remoteAddress,
-                        server: this._readableState.pipes.server.address()
-                    }) + '</code></body></html>');
-                }
+                cb('<html><body><code>' + JSON.stringify(req) + '</code><code>' +
+                JSON.stringify({
+                    client: this._readableState.pipes.remoteAddress,
+                    server: this._readableState.pipes.server.address()
+                }) + '</code></body></html>');
             },
             '/close': function() {
                 if (this._readableState.pipes) { this._readableState.pipes.server.close(); }
@@ -52,9 +51,9 @@ const config = {
             }),
             '/2-30-720.mp4': cb => cb({ src: fs.createReadStream('/home/laur/30-720.mp4') }, {
                 'Content-Type': http.type['mp4'],
-                'Content-Disposition': 'inline',
-                'Content-Duration': 171,
-                'X-Content-Duration': 171
+                'Content-Disposition': 'inline'
+                //'Content-Duration': 171,
+                //'X-Content-Duration': 171
             }),
             '/4K.mp4': cb => cb({ src: '/home/laur/4K.mp4' }, {
                 'Content-Type': http.type['mp4'],
@@ -63,10 +62,8 @@ const config = {
                 'X-Content-Duration': 10
             })
         },
-        POST: {
-            '/post': (cb, req) => {
-                cb('<html><body><code>' + JSON.stringify(req) + '</code></body></html>');
-            }
+        POST: { // remove JSON.stringify(req) or post/attach small files < 1Kb
+            '/post': (cb, req) => cb('<html><body><code>' + JSON.stringify(req) + '</code></body></html>')
         }
     }
 };
@@ -77,10 +74,7 @@ net.createServer(c => {
     on('error', e => console.log('socket error', e.toString())).
     on('end', () => console.log('socket end')).
     on('close', () => console.log('socket close')).
-    pipe(new http(config, {
-        limit: 1e4,
-        chunked: 1e5
-    })).
+    pipe(new http(config)). // , { limit: 1e4, chunked: 1e5 }
     on('httpError', e => console.log('httpError', e.toString())).
     pipe(c);
 }).

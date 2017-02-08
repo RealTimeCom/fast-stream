@@ -13,211 +13,190 @@ const Transform = require('stream').Transform,
 class http extends Transform {
     constructor(f, opt) {
         super();
-        if (typeof this._readableState.pipes !== 'object') { throw new Error('no readable pipe found'); }
         if (typeof opt !== 'object') { opt = {}; }
-        this.f = f; // config functions
-        this.l = 'limit' in opt ? parseInt(opt.limit) : 1e8; // limit bytes, client request header+body maximum bytes, anti memory overhead
-        this.r = 'ranges' in opt ? Boolean(opt.ranges) : true; // accept ranges request, default true
-        this.e = 'error' in opt ? opt.error + '' : 'httpError'; // custom error name event | "error" name will throw the error and exit the process
-        this.n = 'name' in opt ? opt.name === null ? undefined : opt.name + '' : 'fast-stream/1.2'; // Server name/version
-        this.t = 'cache' in opt ? Boolean(opt.cache) : true; // cache, default enabled, send/verify "Last-Modified" and/or "ETag" header
-        this.i = 'closeOnError' in opt ? Boolean(opt.closeOnError) : true; // close connection on error when code>=400, default true for safety, but less speed
-        this.b = 'chunked' in opt ? parseInt(opt.chunked) : 2e7; // chunk bytes, 0-disable
-        if (this.b) { // convert chunk size into hex number
-            this.g = Buffer.from(this.b.toString(16));
+        this._ = { // private Object
+            f: f, // config functions
+            l: 'limit' in opt ? parseInt(opt.limit) : 5e8, // limit bytes ~500Mb , client requests maximum bytes, anti memory overhead ( Infinity - to unlimit )
+            r: 'ranges' in opt ? Boolean(opt.ranges) : true, // accept ranges request, default true
+            e: 'error' in opt ? opt.error + '' : 'httpError', // custom error name event | "error" name will throw the error and exit the process
+            n: 'name' in opt ? opt.name === null ? undefined : opt.name + '' : 'fast-stream/2.0', // Server name/version
+            t: 'cache' in opt ? Boolean(opt.cache) : true, // client cache, default enabled, send/verify "Last-Modified" and/or "ETag" header
+            i: 'closeOnError' in opt ? Boolean(opt.closeOnError) : false, // close connection on error, when http status code >= 400, default false, don't close
+            b: 'chunked' in opt ? parseInt(opt.chunked) : 2e7, // chunk bytes ~20Mb, 0 - disable
+            z: Buffer.allocUnsafeSlow(0), // create an un-pooled empty buffer
+            s: null, // next request is header
+            w: true // connection is open
+        };
+        this._.c = this._.z; // init empty cache buffer
+        if (this._.b) { // convert chunk size into hex number
+            this._.g = Buffer.from(this._.b.toString(16)); // cache the value
         }
-        this.h = true; // data is header?
-        this.z = Buffer.allocUnsafeSlow(0); // create an un-pooled empty buffer
-        this.c = this.z; // init empty cache buffer
-        this.s = {}; // data header request
-        this.w = true; //connection is open?
     }
 }
 
 http.prototype._transform = function(chunk, enc, cb) {
-    if (this.c.length + chunk.length > this.l) {
-        this.error(413);
-    } else {
-        this.c = Buffer.concat([this.c, chunk]); // append chunk to cache
-        if (this.h) { // chunk is header
-            this.s = {}; // init/reset this.s
-            let l = this.c.length,
-                i = this.c.indexOf(http.L); // search for separator
-            if (i !== -1) { // separator is found
-                let request, header, h = this.c.slice(0, i),
-                    j = h.indexOf(http.N);
-                if (j === -1) { // one header line, HTTP/1.0
-                    this.s['request'] = http.request(h);
-                    this.s['header'] = http.header(this.z);
-                } else { // multiple header lines
-                    this.s['request'] = http.request(h.slice(0, j));
-                    this.s['header'] = http.header(h.slice(j + http.N.length));
-                }
-                if (this.s.request.method === undefined || this.s.request.uri === undefined || this.s.request.protocol === undefined) {
-                    this.error(400);
-                } else if (!this.s.header.hostname && this.s.request.protocol === 'HTTP/1.1') { // "Host" header required for HTTP/1.1
-                    this.error(400);
-                } else {
-                    if (!this.s.header.hostname) {
-                        this.s.header['hostname'] = '*';
+    if (this._.w) { // connection is open?
+        if (this._.c.length + chunk.length > this._.l) { // anti memory overhead
+            this._error({}, 413, true); // true - close connection
+        } else {
+            this._.c = Buffer.concat([this._.c, chunk]); // append chunk to the cache buffer
+            if (this._.s === null) { // request is header
+                const l = this._.c.length,
+                    i = this._.c.indexOf(http.L); // search for header/body separator
+                if (i !== -1) { // separator found
+                    const h = this._.c.slice(0, i), // header
+                        j = h.indexOf(http.N); // request URI
+                    let s = { cb: cb }; // cache header values & _transform callback function
+                    if (j === -1) { // only request URI, HTTP/1.0
+                        s.request = request(h);
+                        s.header = headval(this._.z);
+                    } else { // multiple header lines
+                        s.request = request(h.slice(0, j));
+                        s.header = headval(h.slice(j + http.N.length));
                     }
-                    let p = parse(this.s.request.uri, true);
-                    if (!p.hostname) {
-                        p['hostname'] = '*';
-                    }
-                    this.s['path'] = p.pathname;
-                    this.s['query'] = p.query;
-                    // resolve port
-                    if (this.s.header.port) {
-                        this.s['port'] = this.s.header.port;
-                    } else if (p.port) {
-                        this.s['port'] = p.port;
-                    } else if ('pipes' in this._readableState && 'localPort' in this._readableState.pipes) {
-                        this.s['port'] = this._readableState.pipes.localPort;
-                    } else { // set default port 80
-                        this.s['port'] = 80;
-                    }
-                    this.s['hostname'] = this.s.header.hostname === '*' ? p.hostname : this.s.header.hostname;
-                    this.s['host'] = this.s['hostname'] + ':' + this.s['port'];
-                    // resolve host
-                    if (!(this.s.host in this.f)) {
-                        this.s.host = this.s['hostname'];
-                        if (!(this.s.host in this.f)) {
-                            this.s.host = '*:' + this.s['port'];
-                            if (!(this.s.host in this.f)) {
-                                this.s.host = '*';
-                            }
-                        }
-                    }
-                    if (this.s.host in this.f) {
-                        if (this.s.request.method === 'HEAD' || this.s.request.method === 'GET') { // HEAD is same as GET, but only header data is sent
-                            this.c = this.c.slice(i + http.L.length); // cache remaining bytes, for next request
-                            this.fc('GET');
-                        } else if (this.s.request.method === 'OPTIONS') {
-                            this.c = this.c.slice(i + http.L.length); // cache remaining bytes, for next request
-                            if (this.s.path === '*') { // request methods supported by server
-                                this.send(this.s, 'GET, HEAD, POST', {
-                                    'Content-Type': http.type.txt,
-                                    Allow: 'GET, HEAD, POST'
-                                });
-                            } else { // request methods supported by pathname
-                                let c = [];
-                                if (typeof this.f[this.s.host][404] === 'function') {
-                                    c.push('GET', 'HEAD', 'POST');
-                                } else {
-                                    if ('GET' in this.f[this.s.host] && typeof this.f[this.s.host]['GET'][this.s.path] === 'function') {
-                                        c.push('GET', 'HEAD'); // HEAD is same as GET
-                                    }
-                                    if ('POST' in this.f[this.s.host] && typeof this.f[this.s.host]['POST'][this.s.path] === 'function') {
-                                        c.push('POST');
-                                    }
-                                }
-                                if (c.length === 0) {
-                                    this.error(405);
-                                } else {
-                                    this.send(this.s, c.join(', '), {
-                                        'Content-Type': http.type.txt,
-                                        Allow: c.join(', ')
-                                    });
-                                }
-                            }
-                        } else if (this.s.request.method === 'POST') {
-                            if ('length' in this.s.header && this.s.header.length) { // "Content-Length" header required for POST
-                                if (this.s.header.length > this.l) {
-                                    this.error(413); // "Content-Length" exceed the limit
-                                } else if (this.s.header.type === undefined) {
-                                    this.error(400); // "Content-Type" header required for POST
-                                } else if (this.s.header.type === 'multipart' && this.s.header.boundary === undefined) {
-                                    this.error(400); // no boundary found in multipart
-                                }
-                                else {
-                                    let body = this.c.slice(i + http.L.length);
-                                    if (body.length >= this.s.header.length) { // body complete
-                                        if (body.length > this.s.header.length) {
-                                            body = body.slice(0, this.s.header.length);
-                                            this.c = body.slice(this.s.header.length); // cache remaining bytes, for next request
-                                        } else { // empty cache
-                                            this.c = this.z;
-                                        }
-                                        this.s['attach'] = this.s.header.type === 'multipart' ? http.parse(body, this.s.header.boundary) : qs(body.toString());
-                                        this.fc('POST');
-                                    } else { // need more bytes for body
-                                        this.h = false; // next chunk is body
-                                        this.c = body; // save body part to cache
-                                    }
-                                }
-                            } else {
-                                this.error(411);
-                            }
-                        } else if (this.s.request.method === 'PUT' || this.s.request.method === 'DELETE' || this.s.request.method === 'TRACE' || this.s.request.method === 'CONNECT') {
-                            //  todo
-                            this.c = this.c.slice(i + http.L.length); // cache remaining bytes, for next request
-                            this.error(501);
-                        } else {
-                            this.c = this.c.slice(i + http.L.length); // cache remaining bytes, for next request
-                            this.error(405);
-                        }
+                    if (s.request.method === undefined || s.request.uri === undefined || s.request.protocol === undefined) {
+                        this._error(s, 400, true); // true - close connection
+                    } else if (!s.header.hostname && s.request.protocol === 'HTTP/1.1') { // "Host" header required for HTTP/1.1
+                        this._error(s, 400, true); // true - close connection
                     } else {
-                        this.c = this.c.slice(i + http.L.length); // cache remaining bytes, for next request
-                        this.error(404);
+                        if (!s.header.hostname) { s.header.hostname = '*'; }
+                        let p = parse(s.request.uri, true);
+                        if (!p.hostname) { p.hostname = '*'; }
+                        s.path = p.pathname;
+                        s.query = p.query;
+                        // resolve port
+                        if (s.header.port) {
+                            s.port = s.header.port;
+                        } else if (p.port) {
+                            s.port = p.port;
+                        } else if ('pipes' in this._readableState && 'remotePort' in this._readableState.pipes) {
+                            s.port = this._readableState.pipes.remotePort;
+                        } else { // set default port 80
+                            s.port = 80;
+                        }
+                        s.hostname = s.header.hostname === '*' ? p.hostname : s.header.hostname;
+                        s.host = s.hostname + ':' + s.port;
+                        if (!(s.host in this._.f)) {
+                            s.host = s.hostname;
+                            if (!(s.host in this._.f)) {
+                                s.host = '*:' + s.port;
+                                if (!(s.host in this._.f)) { s.host = '*'; }
+                            }
+                        }
+                        if (s.host in this._.f) { // found the host config function
+                            const k = i + http.L.length; // header+separator length
+                            if (s.request.method === 'HEAD' || s.request.method === 'GET') { // HEAD is same as GET, but only header data is sent
+                                this._.c = this._.c.slice(k); // delete current request bytes from cache
+                                this._fc(s, 'GET');
+                            } else if (s.request.method === 'OPTIONS') {
+                                this._.c = this._.c.slice(k); // delete current request bytes from cache
+                                if (s.path === '*') { // request methods supported by server
+                                    this._send(s, 'GET, HEAD, POST', { 'Content-Type': http.type.txt, 'Allow': 'GET, HEAD, POST' });
+                                } else { // request methods supported by pathname
+                                    let c = [];
+                                    if (typeof this._.f[s.host][404] === 'function') {
+                                        c.push('GET', 'HEAD', 'POST');
+                                    } else {
+                                        if ('GET' in this._.f[s.host] && typeof this._.f[s.host]['GET'][s.path] === 'function') {
+                                            c.push('GET', 'HEAD'); // HEAD is same as GET
+                                        }
+                                        if ('POST' in this._.f[s.host] && typeof this._.f[s.host]['POST'][s.path] === 'function') {
+                                            c.push('POST');
+                                        }
+                                    }
+                                    if (c.length === 0) {
+                                        this._error(s, 405);
+                                    } else {
+                                        this._send(s, c.join(', '), { 'Content-Type': http.type.txt, 'Allow': c.join(', ') });
+                                    }
+                                }
+                            } else if (s.request.method === 'POST') {
+                                if ('length' in s.header && s.header.length) { // "Content-Length" header required for POST
+                                    if (s.header.length > this._.l) {
+                                        this._error(s, 413, true); // "Content-Length" exceed the limit
+                                    } else if (s.header.type === undefined) {
+                                        this._error(s, 400, true); // "Content-Type" header required for POST
+                                    } else if (s.header.type === 'multipart' && s.header.boundary === undefined) {
+                                        this._error(s, 400, true); // no "boundary" found in multipart
+                                    } else {
+                                        const body = this._.c.slice(k, k + s.header.length);
+                                        if (body.length === s.header.length) { // body complete
+                                            this._.c = this._.c.slice(k + s.header.length); // delete current request header+body bytes from cache
+                                            s.attach = s.header.type === 'multipart' ? bparse(body, s.header.boundary) : qs(body.toString());
+                                            this._fc(s, 'POST');
+                                        } else {
+                                            this._.s = s; // next request is body
+                                            this._.c = this._.c.slice(k); // delete current request header bytes from cache
+                                            cb(); // need more data for body
+                                        }
+                                    }
+                                } else {
+                                    this._error(s, 411, true);
+                                }
+                            } else if (s.request.method === 'PUT' || s.request.method === 'DELETE' || s.request.method === 'TRACE' || s.request.method === 'CONNECT') {
+                                //  TODO
+                                this._error(s, 501, true); // true - close connection
+                            } else {
+                                this._error(s, 405, true);
+                            }
+                        } else {
+                            this._error(s, 404, true);
+                        }
                     }
-                }
-            } // need more bytes for header
-        } else { // chunk is body
-            if (this.c.length >= this.s.header.length) { // body complete
-                let body;
-                if (this.c.length > this.s.header.length) {
-                    body = this.c.slice(0, this.s.header.length);
-                    this.c = this.c.slice(this.s.header.length); // cache remaining bytes, for next request
                 } else {
-                    body = this.c;
-                    this.c = this.z; // empty cache
+                    cb(); // need more data for header
                 }
-                this.s['attach'] = this.s.header.type === 'multipart' ? http.parse(body, this.s.header.boundary) : qs(body.toString());
-                this.h = true; // next chunk is header
-                this.fc('POST');
-            } // need more bytes for body
+            } else { // request is body
+                const s = this._.s,
+                    body = this._.c.slice(0, s.header.length);
+                if (body.length === s.header.length) { // body complete
+                    this._.s = null; // next request is header
+                    this._.c = this._.c.slice(s.header.length); // delete current request body bytes from cache
+                    s.attach = s.header.type === 'multipart' ? bparse(body, s.header.boundary) : qs(body.toString());
+                    this._fc(s, 'POST');
+                } else {
+                    cb(); // need more data for body
+                }
+            }
         }
-    }
-    cb();
-};
-http.prototype._flush = function(cb) {
-    this.w = false;
-    cb();
-};
-
-http.prototype.fc = function(method) {
-    let f = undefined; // local function call
-    if (method in this.f[this.s.host] && typeof this.f[this.s.host][method][this.s.path] === 'function') {
-        f = this.f[this.s.host][method][this.s.path];
-    } else if (typeof this.f[this.s.host][404] === 'function') {
-        f = this.f[this.s.host][404];
-    }
-    if (f === undefined) { // function call not found
-        this.error(404);
     } else {
-        this._readableState.pipes.pause(); // pause socket until server response back
-        f.bind(this)(this.send.bind(this, this.s), this.s);
+        cb(); // consume internal buffer
     }
 };
 
-http.prototype.error = function(code) {
-    this._readableState.pipes.pause(); // pause socket until server response back
-    this.send(this.s, http.code[code], {
-        'Content-Type': http.type.txt
-    }, code);
+http.prototype._flush = function(cb) {
+    this._.w = false;
+    cb();
 };
 
-http.prototype.fileLength = function(s, body, header, code) {
+http.prototype._error = function(s, code, x) {
+    let h = { 'Content-Type': http.type.txt };
+    if (x) { h['Connection'] = 'close'; }
+    this._send(s, http.code[code], h, code);
+};
+
+http.prototype._fc = function(s, method) {
+    let f; // local function call
+    if (method in this._.f[s.host] && typeof this._.f[s.host][method][s.path] === 'function') {
+        f = this._.f[s.host][method][s.path];
+    } else if (typeof this._.f[s.host][404] === 'function') {
+        f = this._.f[s.host][404];
+    }
+    if (f === undefined) { // found the host config function
+        this._error(s, 404);
+    } else {
+        f.bind(this)(this._send.bind(this, s), s);
+    }
+};
+
+http.prototype._flen = function(s, body, header, code) {
     body.src = path.normalize(body.src.trim());
     if (!(body.src === '.' || body.src === '..')) {
         let t = this;
         fs.lstat(body.src, function(e, d) {
             if (e) {
-                t.emit(t.e, new Error(e));
-                t.send(s, http.code[404], {
-                    'Content-Type': http.type.txt
-                }, 404);
+                t.emit(t.e, e);
+                t._error(s, 404);
             } else {
                 if (t.t) { // cache enabled
                     if (header && typeof header === 'object') {
@@ -230,21 +209,18 @@ http.prototype.fileLength = function(s, body, header, code) {
                     }
                 }
                 body.length = d.size;
-                t.send(s, body, header, code);
+                t._send(s, body, header, code);
             }
         });
     } else {
-        this.send(s, http.code[404], {
-            'Content-Type': http.type.txt
-        }, 404);
+        this._error(s, 404);
     }
 };
 
-http.prototype.send = function(s, body, header, code) {
-
-    if (this.w) { // connection is open?
+http.prototype._send = function(s, body, header, code) {
+    if (this._.w) { // connection is open?
         if (typeof body === 'object' && typeof body.src === 'string' && typeof body.length !== 'number') { // file without length
-            this.fileLength(s, body, header, code); // verify file and get the length
+            this._flen(s, body, header, code); // verify file and get the length
             return; // exit
         }
         // verify http status code value
@@ -257,21 +233,24 @@ http.prototype.send = function(s, body, header, code) {
             header = {}; // init
         }
         // make custom error message
+        if (!s.request) { s.request = {}; }
+        if (!s.header) { s.header = {}; }
+        if (!s.request.protocol) { s.request.protocol = 'HTTP/1.1'; }
         let src = false,
             m = s.host + ' ' + s.request.protocol + ' ' + s.request.method + ' ' + s.path;
         if (code >= 400) {
-            if (this.i) { // close connection
+            if (this._.i) { // close connection
                 header['Connection'] = 'close';
             } else if (code === 413) { // force close connection
                 header['Connection'] = 'close';
             }
-            this.emit(this.e, new Error(code + ' ' + m)); // emit custom error event
+            this.emit(this._.e, new Error(code + ' ' + m)); // emit custom error event
         }
         // verify body value
         if (!Buffer.isBuffer(body)) {
             if (typeof body === 'string') {
                 body = Buffer.from(body);
-            } else if (http.isSource(body)) {
+            } else if (readable(body)) {
                 src = true;
                 if (!('length' in body)) {
                     body.length = -1; // don't send "Accept-Ranges" header if length=-1
@@ -283,9 +262,9 @@ http.prototype.send = function(s, body, header, code) {
         let cached = false,
             l = 'Content-Length' in header ? parseInt(header['Content-Length']) : body.length;
 
-        if (this.t) { // cache enabled, compare ETag and Last-Modified values
+        if (this._.t) { // cache enabled, compare ETag and Last-Modified values
             if (!src && !('ETag' in header)) { // ETag not found, create
-                header['ETag'] = http.etag(body);
+                header['ETag'] = hetag(body);
             }
             if (s.header.etag && s.header.modified && 'ETag' in header && 'Last-Modified' in header) { // verify both
                 if (s.header.etag === header['ETag'] && s.header.modified === header['Last-Modified']) {
@@ -317,10 +296,11 @@ http.prototype.send = function(s, body, header, code) {
         }
         let a = [],
             range = null,
-            x = s.request.protocol === 'HTTP/1.1' && s.header.connection === 'keep-alive' ? 'keep-alive' : 'close'; // can not use "keep-alive" on HTTP/1.0
+            x = s.request.protocol === 'HTTP/1.1' && s.header.connection && s.header.connection === 'keep-alive' ? 'keep-alive' : 'close'; // can not use "keep-alive" on HTTP/1.0
+        if ('Connection' in header && header['Connection'] !== 'keep-alive') { x = 'close'; }
 
-        if (this.r && code === 200 && l > 0 && s.request.protocol === 'HTTP/1.1' && s.header.range) { // range request
-            range = http.range(s.header.range, l);
+        if (this._.r && code === 200 && l > 0 && s.request.protocol === 'HTTP/1.1' && s.header.range) { // range request
+            range = hrange(s.header.range, l);
             if ('Last-Modified' in header) { // for safety, disable client cache
                 delete header['Last-Modified'];
             }
@@ -336,12 +316,12 @@ http.prototype.send = function(s, body, header, code) {
                     body = body.slice(range[0], range[1]);
                 }
             } else { // not in range
-                this.emit(this.e, new Error('416 ' + m)); // emit custom error event
+                this.emit(this._.e, new Error('416 ' + m)); // emit custom error event
                 a.push(s.request.protocol + ' ' + http.code[416]);
                 header['Content-Range'] = 'bytes */' + l;
                 header['Accept-Ranges'] = 'bytes';
                 l = 0; // send headers only
-                if (this.i) {
+                if (this._.i) {
                     x = 'close';
                 }
             }
@@ -356,59 +336,54 @@ http.prototype.send = function(s, body, header, code) {
         if (!('Date' in header)) {
             header['Date'] = new Date().toUTCString();
         }
-        if (!('Server' in header) && this.n) {
-            header['Server'] = this.n;
+        if (!('Server' in header) && this._.n) {
+            header['Server'] = this._.n;
         }
         if (!('Content-Length' in header) && l >= 0) {
             header['Content-Length'] = l;
         }
-        if (!('Accept-Ranges' in header) && this.r && l > 0 && s.request.protocol === 'HTTP/1.1') {
+        if (!('Accept-Ranges' in header) && this._.r && l > 0 && s.request.protocol === 'HTTP/1.1') {
             header['Accept-Ranges'] = 'bytes'; // Accept-Ranges if body length>0
         }
         header['Connection'] = x; // for safety, overwrite header Connection value
 
-        if (s.request.method === 'HEAD' || cached || l === 0) { // send only headers
+        if ((s.request.method && s.request.method === 'HEAD') || cached || l === 0) { // send only headers
             for (let k in header) {
                 a.push(k + ': ' + header[k]);
             }
-            if (this.w) {
+            if (this._.w) {
                 this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L]));
-                if (x === 'close') {
-                    this.push(null);
-                } else if (this._readableState.pipes) {
-                    this._readableState.pipes.resume(); // resume socket, get more data
-                }
+                if (x === 'close') { this.push(null); }
             }
+            s.cb(); // next chunk
         } else {
-            if (this.b && s.request.protocol === 'HTTP/1.1' && (l === -1 || l > this.b)) { // chunked
+            if (this._.b && s.request.protocol === 'HTTP/1.1' && (l === -1 || l > this._.b)) { // chunked
                 if ('Content-Length' in header) {
                     delete header['Content-Length']; // delete "Content-Length" header when chunked enabled
                 }
                 header['Transfer-Encoding'] = 'chunked'; // set "Transfer-Encoding" header
                 if (src) {
-                    this.stream(body.src, x, a, l, header, range, this.b);
+                    this._stream(s.cb, body.src, x, a, l, header, range, this._.b);
                 } else {
-                    console.log('chunked', this.b, range);
+                    console.log('chunked', this._.b, range);
                     for (let k in header) {
                         a.push(k + ': ' + header[k]);
                     }
                     this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); // send headers
 
-                    for (let y, i = 0; i < l; i += this.b) { // for each chunk
-                        y = (l < i + this.b) ? l - i : this.b;
-                        if (this.w) {
-                            this.push(Buffer.concat([y === this.b ? this.g : Buffer.from(y.toString(16)), http.N, body.slice(i, i + y), http.N]));
+                    for (let y, i = 0; i < l; i += this._.b) { // for each chunk
+                        y = (l < i + this._.b) ? l - i : this._.b;
+                        if (this._.w) {
+                            this.push(Buffer.concat([y === this._.b ? this._.g : Buffer.from(y.toString(16)), http.N, body.slice(i, i + y), http.N]));
                         } else {
                             break;
                         }
                     }
-                    if (this.w) { // push end bytes
-                        this.push(http.EL);
-                    }
+                    if (this._.w) { this.push(http.EL); } // push end bytes
                 }
             } else { // not-chunked
                 if (src) {
-                    this.stream(body.src, x, a, l, header, range, 0);
+                    this._stream(s.cb, body.src, x, a, l, header, range, 0);
                 } else {
                     console.log('default', range);
                     for (let k in header) {
@@ -417,18 +392,17 @@ http.prototype.send = function(s, body, header, code) {
                     this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L, body]));
                 }
             }
-            if (!src && this.w) {
-                if (x === 'close') {
-                    this.push(null); // if Connection close, end pipe
-                } else if (this._readableState.pipes) {
-                    this._readableState.pipes.resume(); // resume socket, get more data
-                }
+            if (!src) {
+                if (this._.w && x === 'close') { this.push(null); }
+                s.cb(); // next request
             }
         }
-    } //else, discard, connection end | new client request found
+    } else {
+        s.cb(); // consume internal buffer
+    }
 };
 
-http.prototype.stream = function(src, x, a, l, header, range, chunked) {
+http.prototype._stream = function(cb, src, x, a, l, header, range, chunked) {
     let t = this,
         f = (typeof src === 'string');
     console.log(f ? 'file' : 'stream', x, chunked, range);
@@ -446,24 +420,24 @@ http.prototype.stream = function(src, x, a, l, header, range, chunked) {
     this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); // send headers
     src.
     on('error', function(e) {
-        t.emit(t.e, e);
+        this.pause();
         this.unpipe();
-        this.resume();
+        t.emit(t._.e, e);
+        if (t._.w) { t.push(null); }
+        cb(); // consume internal buffer
     }).
     on('end', function() {
-        if (t.w) {
+        if (t._.w) {
             this.unpipe();
-            if (x === 'close') {
-                t.push(null);
-            } else if (t._readableState.pipes) {
-                t._readableState.pipes.resume();
-            }
+            if (x === 'close') { t.push(null); }
         }
+        cb(); // next request
     }).
     on('readable', function() {
-        if (!t.w) {
+        if (!t._.w) {
+            this.pause();
             this.unpipe();
-            this.resume();
+            cb(); // consume internal buffer
         }
     });
     if (!f && range) {
@@ -481,7 +455,7 @@ http.prototype.stream = function(src, x, a, l, header, range, chunked) {
     }
 };
 
-http.isSource = function(b) {
+function readable(b) {
     let r = false;
     if (typeof b === 'object') {
         let t = typeof b.src;
@@ -494,8 +468,9 @@ http.isSource = function(b) {
         }
     }
     return r;
-};
-http.request = function(u) {
+}
+
+function request(u) {
     let method = undefined,
         uri = undefined,
         protocol = u.slice(u.length - 9).toString().trim();
@@ -513,8 +488,9 @@ http.request = function(u) {
         uri: uri,
         protocol: protocol
     };
-};
-http.header = function(h) {
+}
+
+function headval(h) {
     let i = 0,
         n = 0,
         a = [],
@@ -585,8 +561,9 @@ http.header = function(h) {
         modified: modified,
         range: range
     };
-};
-http.parse = function(d, q) { // parse POST body data
+}
+
+function bparse(d, q) { // parse POST body data
     let b = {
             query: {},
             files: []
@@ -632,8 +609,9 @@ http.parse = function(d, q) { // parse POST body data
         }
     }
     return b;
-};
-http.range = function(d, l) { // verify Range bytes value
+}
+
+function hrange(d, l) { // verify Range bytes value
     let r = null,
         s = d.split('-');
     if (s.length === 2) {
@@ -656,10 +634,11 @@ http.range = function(d, l) { // verify Range bytes value
         }
     }
     return r;
-};
-http.etag = function(s) { // non-blocking (no I/O) safe sync call for md5 hex calculation
+}
+
+function hetag(s) { // non-blocking (no I/O) safe sync call for md5 hex calculation
     return crypto.createHash('md5').update(s).digest('hex');
-};
+}
 
 // store common values in memory for fast access and less I/O
 http.n = '\r\n';
