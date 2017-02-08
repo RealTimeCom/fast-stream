@@ -16,13 +16,13 @@ class http extends Transform {
         if (typeof opt !== 'object') { opt = {}; }
         this._ = { // private Object
             f: f, // config functions
-            l: 'limit' in opt ? parseInt(opt.limit) : 5e8, // limit bytes ~500Mb , client requests maximum bytes, anti memory overhead ( Infinity - to unlimit )
+            l: 'limit' in opt ? parseInt(opt.limit) : 5e8, // limit bytes ~500MB , client requests maximum bytes, anti memory overhead ( Infinity - to unlimit )
             r: 'ranges' in opt ? Boolean(opt.ranges) : true, // accept ranges request, default true
             e: 'error' in opt ? opt.error + '' : 'httpError', // custom error name event | "error" name will throw the error and exit the process
             n: 'name' in opt ? opt.name === null ? undefined : opt.name + '' : 'fast-stream/2.0', // Server name/version
             t: 'cache' in opt ? Boolean(opt.cache) : true, // client cache, default enabled, send/verify "Last-Modified" and/or "ETag" header
             i: 'closeOnError' in opt ? Boolean(opt.closeOnError) : false, // close connection on error, when http status code >= 400, default false, don't close
-            b: 'chunked' in opt ? parseInt(opt.chunked) : 2e7, // chunk bytes ~20Mb, 0 - disable
+            b: 'chunked' in opt ? parseInt(opt.chunked) : 2e7, // chunk bytes ~20MB, 0 - disable
             z: Buffer.allocUnsafeSlow(0), // create an un-pooled empty buffer
             s: null, // next request is header
             w: true // connection is open
