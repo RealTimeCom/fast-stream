@@ -92,7 +92,7 @@ const config = {
 * when `req.header.type` is `multipart` - Object { query: Object `querystring`, files: Array Object { name: String, data: Buffer } }
 
 ### `options` Object http class argument
-* `limit` Number - request data maximum size, default `5e8` ~500MB, for `POST` big data/files, consider to increase this value
+* `limit` Number - anti memory overhead, request data maximum size, default `5e8` ~500MB, for big data/files, consider to increase this value
 * `ranges` Boolean - accept ranges request, default `true`
 * `error` String - custom error name event, default `httpError`
 * `name` String - Server name/version, default `fast-stream/2.0`, `null` - to disable
