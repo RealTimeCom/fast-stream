@@ -30,7 +30,7 @@ const config = {
             '/favicon.ico': cb => cb({
                 src: '/dir/favicon.ico' // source: file path
             }, { // additional header
-                'Content-Type': http.type['ico']
+                'Content-Type': http.type.ico
             }),
             '/vid.mp4': cb => cb({
                 src: fs.createReadStream('/dir/vid.mp4') // source: readable Stream
@@ -53,13 +53,13 @@ const config = {
                 cb('<html><body>' + // client IP address
                     '<h3>' + this._readableState.pipes.remoteAddress + '</h3>' +
                     '<code>' + JSON.stringify(req) + '</code>' +
-                    '</body></html>');
+                    '</body></html>'); // default 'Content-Type' is 'text/html' utf8
             }
         }
     },
     '127.0.0.1:80': { // another host
         GET: { // URL: http://127.0.0.1/
-            '/': cb => cb('Request from 127.0.0.1:80', http.type.txt)
+            '/': cb => cb('Request from 127.0.0.1:80', { 'Content-Type': http.type.txt })
         }
     }
 };
