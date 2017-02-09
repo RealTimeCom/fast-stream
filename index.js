@@ -371,7 +371,7 @@ http.prototype._send = function(s, body, header, code) {
                 if (src) {
                     this._stream(s.cb, body.src, x, a, l, header, range, this._.b);
                 } else {
-                    console.log('chunked', this._.b, range);
+                    //console.log('chunked', this._.b, range);
                     for (let k in header) {
                         a.push(k + ': ' + header[k]);
                     }
@@ -391,7 +391,7 @@ http.prototype._send = function(s, body, header, code) {
                 if (src) {
                     this._stream(s.cb, body.src, x, a, l, header, range, 0);
                 } else {
-                    console.log('default', range);
+                    //console.log('default', range);
                     for (let k in header) {
                         a.push(k + ': ' + header[k]);
                     }
@@ -410,7 +410,7 @@ http.prototype._stream = function(cb, src, x, a, l, header, range, chunked) {
     if (this._readableState.pipes) {
         let t = this,
             f = (typeof src === 'string');
-        console.log(f ? 'file' : 'stream', x, chunked, range);
+        //console.log(f ? 'file' : 'stream', x, chunked, range);
         if (f) {
             src = fs.createReadStream(src, range ? { start: range[0], end: range[1] } : {});
         } else {
