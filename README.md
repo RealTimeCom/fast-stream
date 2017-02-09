@@ -17,9 +17,9 @@ const config = {
         404: cb => cb('<html><body><h3>Hello World!</h3></body></html>', null, 200)
     }
 };
-require('net').createServer( // or require('tls') for HTTPS ( SSL )
+require('net').createServer( // or require('tls') for HTTPS / SSL
     socket => socket.pipe(new http(config)).pipe(socket)
-).listen(80);
+).listen(80); // or 443 for HTTPS / SSL
 ```
 Sample `config` for files or readable streams.
 ```js
@@ -48,8 +48,17 @@ Function `host` arguments `cb`, `req` and `this` bind example.
 ```js
 const config = {
     'localhost:80': { // hostname "localhost" port "80"
-        POST: { // method POST, remove JSON.stringify(req) when POST big files > 1KB
-            '/index.html': function host(cb, req) {
+        GET: { // URL: http://localhost/
+            '/': cb => cb('<html><body>' + // attach small files, or remove JSON.stringify(req), see below
+                '<form action="/attach.html" method="post" enctype="multipart/form-data">' +
+                '<input type="text" name="t1"><input type="text" name="t2"><input type="text" name="t2">' +
+                '<input type="file" name="f1"><input type="file" name="f2"><input type="file" name="f2">' +
+                '<input type="submit" value="Submit">' +
+                '</form>' +
+                '</body></html>')
+        },
+        POST: { // URL: http://localhost/attach.html (method POST only)
+            '/attach.html': function host(cb, req) {
                 cb('<html><body>' + // client IP address
                     '<h3>' + this._readableState.pipes.remoteAddress + '</h3>' +
                     '<code>' + JSON.stringify(req) + '</code>' +
