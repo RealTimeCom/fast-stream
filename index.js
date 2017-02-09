@@ -13,19 +13,21 @@ const Transform = require('stream').Transform,
 class http extends Transform {
     constructor(f, opt) {
         super();
+        if (!('pipes' in this._readableState)) { throw new Error('no readable pipe found'); }
         if (typeof opt !== 'object') { opt = {}; }
         this._ = { // private Object
             f: f, // config functions
             l: 'limit' in opt ? parseInt(opt.limit) : 5e8, // limit bytes ~500MB , client requests maximum bytes, anti memory overhead ( Infinity - to unlimit )
             r: 'ranges' in opt ? Boolean(opt.ranges) : true, // accept ranges request, default true
             e: 'error' in opt ? opt.error + '' : 'httpError', // custom error name event | "error" name will throw the error and exit the process
-            n: 'name' in opt ? opt.name === null ? undefined : opt.name + '' : 'fast-stream/2.0', // Server name/version
+            n: 'name' in opt ? opt.name === null ? undefined : opt.name + '' : 'fast-stream/2.1', // Server name/version
             t: 'cache' in opt ? Boolean(opt.cache) : true, // client cache, default enabled, send/verify "Last-Modified" and/or "ETag" header
             i: 'closeOnError' in opt ? Boolean(opt.closeOnError) : false, // close connection on error, when http status code >= 400, default false, don't close
             b: 'chunked' in opt ? parseInt(opt.chunked) : 2e7, // chunk bytes ~20MB, 0 - disable
             z: Buffer.allocUnsafeSlow(0), // create an un-pooled empty buffer
             s: null, // next request is header
-            w: true // connection is open
+            w: true, // connection is open
+            y: true // suppress errors
         };
         this._.c = this._.z; // init empty cache buffer
         if (this._.b) { // convert chunk size into hex number
@@ -35,9 +37,13 @@ class http extends Transform {
 }
 
 http.prototype._transform = function(chunk, enc, cb) {
-    if (this._.w) { // connection is open?
+    if (this._.y) {
+        this._.y = false;
+        this._readableState.pipes.on('error', e => this.emit(this._.e, e)); // suppress errors
+    }
+    if (this._.w && this._readableState.pipes) { // connection is open?
         if (this._.c.length + chunk.length > this._.l) { // anti memory overhead
-            this._error({}, 413, true); // true - close connection
+            this._error({ cb: cb }, 413, true); // true - close connection
         } else {
             this._.c = Buffer.concat([this._.c, chunk]); // append chunk to the cache buffer
             if (this._.s === null) { // request is header
@@ -218,7 +224,7 @@ http.prototype._flen = function(s, body, header, code) {
 };
 
 http.prototype._send = function(s, body, header, code) {
-    if (this._.w) { // connection is open?
+    if (this._.w && this._readableState.pipes) { // connection is open?
         if (typeof body === 'object' && typeof body.src === 'string' && typeof body.length !== 'number') { // file without length
             this._flen(s, body, header, code); // verify file and get the length
             return; // exit
@@ -351,11 +357,11 @@ http.prototype._send = function(s, body, header, code) {
             for (let k in header) {
                 a.push(k + ': ' + header[k]);
             }
-            if (this._.w) {
+            if (this._.w && this._readableState.pipes) {
                 this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L]));
                 if (x === 'close') { this.push(null); }
+                s.cb(); // next chunk
             }
-            s.cb(); // next chunk
         } else {
             if (this._.b && s.request.protocol === 'HTTP/1.1' && (l === -1 || l > this._.b)) { // chunked
                 if ('Content-Length' in header) {
@@ -373,13 +379,13 @@ http.prototype._send = function(s, body, header, code) {
 
                     for (let y, i = 0; i < l; i += this._.b) { // for each chunk
                         y = (l < i + this._.b) ? l - i : this._.b;
-                        if (this._.w) {
+                        if (this._.w && this._readableState.pipes) {
                             this.push(Buffer.concat([y === this._.b ? this._.g : Buffer.from(y.toString(16)), http.N, body.slice(i, i + y), http.N]));
                         } else {
                             break;
                         }
                     }
-                    if (this._.w) { this.push(http.EL); } // push end bytes
+                    if (this._.w && this._readableState.pipes) { this.push(http.EL); } // push end bytes
                 }
             } else { // not-chunked
                 if (src) {
@@ -392,66 +398,67 @@ http.prototype._send = function(s, body, header, code) {
                     this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L, body]));
                 }
             }
-            if (!src) {
-                if (this._.w && x === 'close') { this.push(null); }
+            if (!src && this._.w && this._readableState.pipes) {
+                if (x === 'close') { this.push(null); }
                 s.cb(); // next request
             }
         }
-    } else {
-        s.cb(); // consume internal buffer
     }
 };
 
 http.prototype._stream = function(cb, src, x, a, l, header, range, chunked) {
-    let t = this,
-        f = (typeof src === 'string');
-    console.log(f ? 'file' : 'stream', x, chunked, range);
-    if (f) {
-        src = fs.createReadStream(src, range ? { start: range[0], end: range[1] } : {});
-    } else {
-        if (!chunked && l === -1) { // unknown length, close connection
-            x = 'close';
-            header['Connection'] = x;
-        }
-    }
-    for (let k in header) {
-        a.push(k + ': ' + header[k]);
-    }
-    this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); // send headers
-    src.
-    on('error', function(e) {
-        this.pause();
-        this.unpipe();
-        t.emit(t._.e, e);
-        if (t._.w) { t.push(null); }
-        cb(); // consume internal buffer
-    }).
-    on('end', function() {
-        if (t._.w) {
-            this.unpipe();
-            if (x === 'close') { t.push(null); }
-        }
-        cb(); // next request
-    }).
-    on('readable', function() {
-        if (!t._.w) {
-            this.pause();
-            this.unpipe();
-            cb(); // consume internal buffer
-        }
-    });
-    if (!f && range) {
-        if (chunked) {
-            src.pipe(new bs(range)).pipe(new cs(chunked)).pipe(this._readableState.pipes, { end: false });
+    if (this._readableState.pipes) {
+        let t = this,
+            f = (typeof src === 'string');
+        console.log(f ? 'file' : 'stream', x, chunked, range);
+        if (f) {
+            src = fs.createReadStream(src, range ? { start: range[0], end: range[1] } : {});
         } else {
-            src.pipe(new bs(range)).pipe(this._readableState.pipes, { end: false });
+            if (!chunked && l === -1) { // unknown length, close connection
+                x = 'close';
+                header['Connection'] = x;
+            }
+        }
+        for (let k in header) {
+            a.push(k + ': ' + header[k]);
+        }
+        this.push(Buffer.concat([Buffer.from(a.join(http.n)), http.L])); // send headers
+        src.
+        on('error', function(e) {
+            this.unpipe();
+            t.emit(t._.e, e);
+            if (t._.w && t._readableState.pipes) {
+                t.push(null); // close connection
+                cb(); // consume internal buffer
+            }
+        }).
+        on('end', function() {
+            this.unpipe();
+            if (t._.w && t._readableState.pipes) {
+                if (x === 'close') { t.push(null); }
+                cb(); // next request
+            }
+        }).
+        on('readable', function() {
+            if (!t._readableState.pipes) { // verify the readable stream
+                this.unpipe();
+            }
+        });
+        if (!f && range) {
+            if (chunked) {
+                src.pipe(new bs(range)).pipe(new cs(chunked)).pipe(this._readableState.pipes, { end: false });
+            } else {
+                src.pipe(new bs(range)).pipe(this._readableState.pipes, { end: false });
+            }
+        } else {
+            if (chunked) {
+                src.pipe(new cs(chunked)).pipe(this._readableState.pipes, { end: false });
+            } else {
+                src.pipe(this._readableState.pipes, { end: false });
+            }
         }
     } else {
-        if (chunked) {
-            src.pipe(new cs(chunked)).pipe(this._readableState.pipes, { end: false });
-        } else {
-            src.pipe(this._readableState.pipes, { end: false });
-        }
+        this._error({ cb: cb }, 500);
     }
 };
 

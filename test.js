@@ -71,7 +71,6 @@ const config = {
 net.createServer(c => {
     console.log('client connected');
     c.
-    on('error', e => console.log('socket error', e.toString())).
     on('end', () => console.log('socket end')).
     on('close', () => console.log('socket close')).
     pipe(new http(config)). // , { limit: 1e4, chunked: 1e5 }
