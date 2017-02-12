@@ -30,9 +30,10 @@ const conf = {
 };
 require('net').createServer(socket => socket.pipe(new http(conf)).pipe(socket)).listen(80);
 ```
-Sample `conf` for files or readable streams.
+Sample `conf` for files or readable streams, <a href="https://github.com/RealTimeCom/mimehttp"><b>mimehttp</b></a> optional.
 ```js
-const fs = require('fs'), mime = require('mimehttp');
+const fs = require('fs');
+const mime = require('mimehttp');
 const conf = {
     '*': {
         GET: { // method GET
