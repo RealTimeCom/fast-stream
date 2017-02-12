@@ -23,19 +23,19 @@ require('net').createServer( // or require('tls') for HTTPS / SSL
 ```
 Sample `config` for files or readable streams.
 ```js
-const fs = require('fs');
+const fs = require('fs'), mime = require('mimehttp');
 const config = {
     '*': {
         GET: { // method GET
             '/favicon.ico': cb => cb({
                 src: '/dir/favicon.ico' // source: file path
             }, { // additional header
-                'Content-Type': http.type.ico
+                'Content-Type': mime.type.ico
             }),
             '/vid.mp4': cb => cb({
                 src: fs.createReadStream('/dir/vid.mp4') // source: readable Stream
             }, { // additional headers
-                'Content-Type': http.type['mp4'],
+                'Content-Type': mime.type['mp4'],
                 'Content-Disposition': 'inline', // display in browser
                 'Content-Duration': 171, // required for web video player
                 'X-Content-Duration': 171  // video duration in seconds
@@ -68,7 +68,7 @@ const config = {
     },
     '127.0.0.1:80': { // another host
         GET: { // URL: http://127.0.0.1/
-            '/': cb => cb('Request from 127.0.0.1:80', { 'Content-Type': http.type.txt })
+            '/': cb => cb('Request from 127.0.0.1:80', { 'Content-Type': 'text/plain' })
         }
     }
 };
@@ -109,7 +109,7 @@ const config = {
 * `limit` Number - anti memory overhead, request data maximum size, default `5e8` ~500MB, for big data/files, consider to increase this value
 * `ranges` Boolean - accept ranges request, default `true`
 * `error` String - custom error name event, default `httpError`
-* `name` String - Server name/version, default `fast-stream/2.1`, `null` - to disable
+* `name` String - Server name/version, default `fast-stream/2.2`, `null` - to disable
 * `cache` Boolean - client cache, send/verify "Last-Modified" and/or "ETag" header, default `true`
 * `closeOnError` Boolean - close connection on status `code` >= `400`, default `false`, don't close
 * `chunked` Number - if body response size is greater than this value, send "Transfer-Encoding: chunked", default `2e7` ~20MB, `0` - to disable

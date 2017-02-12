@@ -3,7 +3,8 @@
 
 const http = require('./index.js'),
     fs = require('fs'),
-    net = require('net');
+    net = require('net'),
+    mime = require('mimehttp');
 
 const config = {
     '*': {
@@ -29,34 +30,34 @@ const config = {
                 '<video controls><source src="30-720.mp4" type="video/mp4"></video>' +
                 '<video controls><source src="4K.mp4" type="video/mp4"></video>' +
                 '</body></html>'),
-            '/chunk': cb => cb('0123456789', { 'Content-Type': http.type.txt }),
+            '/chunk': cb => cb('0123456789', { 'Content-Type': mime.type.txt }),
             '/c.txt': cb => {
                 cb({
                     src: fs.createReadStream('/home/laur/c.txt'),
                     length: 10
                 });
             },
-            '/favicon.ico': cb => cb({ src: '/home/laur/favicon.ico' }, { 'Content-Type': http.type['ico'] }),
+            '/favicon.ico': cb => cb({ src: '/home/laur/favicon.ico' }, { 'Content-Type': mime.type['ico'] }),
             '/1-480.mp4': cb => cb({ src: '/home/laur/1-480.mp4' }, {
-                'Content-Type': http.type['mp4'],
+                'Content-Type': mime.type['mp4'],
                 'Content-Disposition': 'inline',
                 'Content-Duration': 5,
                 'X-Content-Duration': 5
             }),
             '/30-720.mp4': cb => cb({ src: '/home/laur/30-720.mp4' }, {
-                'Content-Type': http.type['mp4'],
+                'Content-Type': mime.type['mp4'],
                 'Content-Disposition': 'inline',
                 'Content-Duration': 171,
                 'X-Content-Duration': 171
             }),
             '/2-30-720.mp4': cb => cb({ src: fs.createReadStream('/home/laur/30-720.mp4') }, {
-                'Content-Type': http.type['mp4'],
+                'Content-Type': mime.type['mp4'],
                 'Content-Disposition': 'inline'
                 //'Content-Duration': 171,
                 //'X-Content-Duration': 171
             }),
             '/4K.mp4': cb => cb({ src: '/home/laur/4K.mp4' }, {
-                'Content-Type': http.type['mp4'],
+                'Content-Type': mime.type['mp4'],
                 'Content-Disposition': 'inline',
                 'Content-Duration': 10,
                 'X-Content-Duration': 10

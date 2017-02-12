@@ -8,7 +8,8 @@ const Transform = require('stream').Transform,
     fs = require('fs'),
     crypto = require('crypto'),
     bs = require('bytes-stream'),
-    cs = require('chunks-stream');
+    cs = require('chunks-stream'),
+    mime = require('mimehttp');
 
 class http extends Transform {
     constructor(f, opt) {
@@ -20,7 +21,7 @@ class http extends Transform {
             l: 'limit' in opt ? parseInt(opt.limit) : 5e8, // limit bytes ~500MB , client requests maximum bytes, anti memory overhead ( Infinity - to unlimit )
             r: 'ranges' in opt ? Boolean(opt.ranges) : true, // accept ranges request, default true
             e: 'error' in opt ? opt.error + '' : 'httpError', // custom error name event | "error" name will throw the error and exit the process
-            n: 'name' in opt ? opt.name === null ? undefined : opt.name + '' : 'fast-stream/2.1', // Server name/version
+            n: 'name' in opt ? opt.name === null ? undefined : opt.name + '' : 'fast-stream/2.2', // Server name/version
             t: 'cache' in opt ? Boolean(opt.cache) : true, // client cache, default enabled, send/verify "Last-Modified" and/or "ETag" header
             i: 'closeOnError' in opt ? Boolean(opt.closeOnError) : false, // close connection on error, when http status code >= 400, default false, don't close
             b: 'chunked' in opt ? parseInt(opt.chunked) : 2e7, // chunk bytes ~20MB, 0 - disable
@@ -97,7 +98,7 @@ http.prototype._transform = function(chunk, enc, cb) {
                             } else if (s.request.method === 'OPTIONS') {
                                 this._.c = this._.c.slice(k); // delete current request bytes from cache
                                 if (s.path === '*') { // request methods supported by server
-                                    this._send(s, 'GET, HEAD, POST', { 'Content-Type': http.type.txt, 'Allow': 'GET, HEAD, POST' });
+                                    this._send(s, 'GET, HEAD, POST', { 'Content-Type': mime.type.txt, 'Allow': 'GET, HEAD, POST' });
                                 } else { // request methods supported by pathname
                                     let c = [];
                                     if (typeof this._.f[s.host][404] === 'function') {
@@ -113,7 +114,7 @@ http.prototype._transform = function(chunk, enc, cb) {
                                     if (c.length === 0) {
                                         this._error(s, 405);
                                     } else {
-                                        this._send(s, c.join(', '), { 'Content-Type': http.type.txt, 'Allow': c.join(', ') });
+                                        this._send(s, c.join(', '), { 'Content-Type': mime.type.txt, 'Allow': c.join(', ') });
                                     }
                                 }
                             } else if (s.request.method === 'POST') {
@@ -176,7 +177,7 @@ http.prototype._flush = function(cb) {
 };
 
 http.prototype._error = function(s, code, x) {
-    let h = { 'Content-Type': http.type.txt };
+    let h = { 'Content-Type': mime.type.txt };
     if (x) { h['Connection'] = 'close'; }
     this._send(s, http.code[code], h, code);
 };
@@ -336,8 +337,8 @@ http.prototype._send = function(s, body, header, code) {
         } else {
             a.push(s.request.protocol + ' ' + http.code[code]);
         }
-        if (!('Content-Type' in header)) { // default "Content-Type" value text/html
-            header['Content-Type'] = http.type.html;
+        if (!('Content-Type' in header)) {
+            header['Content-Type'] = mime.type.html; // default "Content-Type"
         }
         if (!('Date' in header)) {
             header['Date'] = new Date().toUTCString();
@@ -712,96 +713,6 @@ http.code = {
     503: '503 Service Unavailable',
     504: '504 Gateway Timeout',
     505: '505 HTTP Version Not Supported'
-};
-
-// common MIME Types
-http.type = {
-    'unknown': 'application/octet-stream',
-    // text, UTF-8 is added for safety
-    'txt': 'text/plain; charset=UTF-8',
-    'html': 'text/html; charset=UTF-8',
-    'css': 'text/css; charset=UTF-8',
-    'js': 'text/javascript; charset=UTF-8',
-    'csv': 'text/csv; charset=UTF-8',
-    'rtx': 'text/richtext; charset=UTF-8',
-    // application
-    'xml': 'application/xml',
-    'xhtml': 'application/xhtml+xml',
-    'rtf': 'application/rtf',
-    'json': 'application/json',
-    'jsonp': 'application/json-p',
-    'ttf': 'application/x-font-ttf',
-    'otf': 'application/x-font-opentype',
-    'woff': 'application/font-woff',
-    'doc': 'application/msword',
-    'm3u8': 'application/vnd.apple.mpegurl',
-    '7z': 'application/x-7z-compressed',
-    'air': 'application/vnd.adobe.air-application-installer-package+zip',
-    'swf': 'application/x-shockwave-flash',
-    'pdf': 'application/pdf',
-    'dir': 'application/x-director',
-    'apk': 'application/vnd.android.package-archive',
-    'mpkg': 'application/vnd.apple.installer+xml',
-    'atom': 'application/atom+xml',
-    'torrent': 'application/x-bittorrent',
-    'sh': 'application/x-sh',
-    'bz': 'application/x-bzip',
-    'bz2': 'application/x-bzip2',
-    'deb': 'application/x-debian-package',
-    'exe': 'application/x-msdownload',
-    'xls': 'application/vnd.ms-excel',
-    'mxml': 'application/xv+xml',
-    'ogx': 'application/ogg',
-    'rar': 'application/x-rar-compressed',
-    'rss': 'application/rss+xml',
-    'tar': 'application/x-tar',
-    'tcl': 'application/x-tcl',
-    'xslt': 'application/xslt+xml',
-    'zip': 'application/zip',
-    // image
-    'ico': 'image/x-icon',
-    'gif': 'image/gif',
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'bmp': 'image/bmp',
-    'png': 'image/png',
-    'svg': 'image/svg+xml',
-    'tiff': 'image/tiff',
-    'webp': 'image/webp',
-    'xif': 'image/vnd.xiff',
-    // audio
-    'aac': 'audio/x-aac',
-    'dts': 'audio/vnd.dts',
-    'dtshd': 'audio/vnd.dts.hd',
-    'm3u': 'audio/x-mpegurl',
-    'wma': 'audio/x-ms-wma',
-    'mid': 'audio/midi',
-    'mpga': 'audio/mpeg',
-    'mp4a': 'audio/mp4',
-    'oga': 'audio/ogg',
-    'weba': 'audio/webm',
-    'ram': 'audio/x-pn-realaudio',
-    'wav': 'audio/x-wav',
-    // video
-    'mp4': 'video/mp4',
-    'webm': 'video/webm',
-    'mpeg': 'video/mpeg',
-    'avi': 'video/x-msvideo',
-    '3gp': 'video/3gpp',
-    '3g2': 'video/3gpp2',
-    'f4v': 'video/x-f4v',
-    'flv': 'video/x-flv',
-    'm4v': 'video/x-m4v',
-    'h263': 'video/h263',
-    'h264': 'video/h264',
-    'asf': 'video/x-ms-asf',
-    'wm': 'video/x-ms-wm',
-    'wmx': 'video/x-ms-wmx',
-    'wmv': 'video/x-ms-wmv',
-    'wvx': 'video/x-ms-wvx',
-    'ogv': 'video/ogg',
-    'qt': 'video/quicktime',
-    'jpgv': 'video/jpeg'
 };
 
 module.exports = http;
