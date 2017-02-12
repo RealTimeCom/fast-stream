@@ -9,22 +9,31 @@
 ```sh
 $ npm install fast-stream
 ```
-Simple server configuration `config`, serve all requests with `200` OK.
+Simple server configuration `conf`, serve all requests with `200` OK.
 ```js
 const http = require('fast-stream');
-const config = {
+const conf = {
     '*': { // host name "*" <for all>, "cb" is the callback function
         404: cb => cb('<html><body><h3>Hello World!</h3></body></html>', null, 200)
     }
 };
 require('net').createServer( // or require('tls') for HTTPS / SSL
-    socket => socket.pipe(new http(config)).pipe(socket)
+    socket => socket.pipe(new http(conf)).pipe(socket)
 ).listen(80); // or 443 for HTTPS / SSL
 ```
-Sample `config` for files or readable streams.
+Create `conf` using <a href="https://github.com/RealTimeCom/fast-config"><b>fast-config</b></a> module for static files.
+```js
+const get = require('fast-config');
+const http = require('fast-stream');
+const conf = {
+    '*': get('/path/src') // static files directory
+};
+require('net').createServer(socket => socket.pipe(new http(conf)).pipe(socket)).listen(80);
+```
+Sample `conf` for files or readable streams.
 ```js
 const fs = require('fs'), mime = require('mimehttp');
-const config = {
+const conf = {
     '*': {
         GET: { // method GET
             '/favicon.ico': cb => cb({
@@ -46,7 +55,7 @@ const config = {
 ```
 Function `host` arguments `cb`, `req` and `this` bind example.
 ```js
-const config = {
+const conf = {
     'localhost:80': { // hostname "localhost" port "80"
         GET: { // URL: http://localhost/
             '/': cb => cb('<html><body>' + // attach small files, or remove JSON.stringify(req), see below
